@@ -91,40 +91,95 @@ function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas) {
 
 // PRUEBAS
 
-const n = 5;
-let tablero = Array.from({ length: n }, () => Array(n).fill(-1));
+async function main() {
 
-let inicioX = 0;
-let inicioY = 0;
+    const n = parseInt(
+        await preguntar("Digite el tamaño N del tablero: ")
+    );
 
-// CAMBIO: lista de obstáculos
-let obstaculos = [
-    [1, 1],
-    [2, 3],
-    [4, 0]
-];
+    let tablero = Array.from(
+        { length: n },
+        () => Array(n).fill(-1)
+    );
 
-agregarObstaculos(tablero, obstaculos);
+    const inicioX = parseInt(
+        await preguntar("Digite fila inicial: ")
+    );
 
-if (tablero[inicioX][inicioY] === -2) {
-    console.log("Error: la posición inicial no puede ser un obstáculo.");
-} else {
+    const inicioY = parseInt(
+        await preguntar("Digite columna inicial: ")
+    );
+
+    const cantidadObstaculos = parseInt(
+        await preguntar("Digite cantidad de obstáculos: ")
+    );
+
+    let obstaculos = [];
+
+    for (let i = 0; i < cantidadObstaculos; i++) {
+
+        let x = parseInt(
+            await preguntar(`Fila obstáculo ${i + 1}: `)
+        );
+
+        let y = parseInt(
+            await preguntar(`Columna obstáculo ${i + 1}: `)
+        );
+
+        obstaculos.push([x, y]);
+    }
+
+    agregarObstaculos(tablero, obstaculos);
+
+    // Validar inicio
+
+    if (tablero[inicioX][inicioY] === -2) {
+
+        console.log(
+            "Error: la posición inicial es un obstáculo."
+        );
+
+        rl.close();
+        return;
+    }
+
     tablero[inicioX][inicioY] = 0;
 
     let totalCasillas = contarCasillasLibres(tablero);
 
-    console.log("Probando recorrido del caballo con obstáculos");
-    console.log("Tamaño del tablero:", n + "x" + n);
-    console.log("Posición inicial:", "(" + inicioX + "," + inicioY + ")");
+    console.log("\n=== DATOS DEL PROBLEMA ===");
+
+    console.log("Tamaño:", n + "x" + n);
+
+    console.log(
+        "Inicio:",
+        "(" + inicioX + "," + inicioY + ")"
+    );
+
     console.log("Obstáculos:", obstaculos);
 
-    let solucion = resolverCaballo(tablero, inicioX, inicioY, 1, totalCasillas);
+    let solucion = resolverCaballo(
+        tablero,
+        inicioX,
+        inicioY,
+        1,
+        totalCasillas
+    );
 
     if (solucion) {
-        console.log("Solución encontrada:");
+
+        console.log("\nSolución encontrada:");
         console.table(tablero);
+
     } else {
-        console.log("No se encontró solución.");
+
+        console.log("\nNo se encontró solución.");
         console.table(tablero);
     }
+
+    rl.close();
 }
+
+// Ejecutar programa
+
+main();

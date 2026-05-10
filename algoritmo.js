@@ -18,45 +18,74 @@ function esValido(x, y, tablero) {
     );
 }
 
-function movimientosValidos(x, y, n) {
+function movimientosValidos(x, y, tablero) {
     // Devuelve una lista de posiciones vaalidas a las que puede moverse el caballo desde (x, y) en un tablero n x n
     let validos = [];
     for (let mov of movimientos) {
         let nx = x + mov[0];
         let ny = y + mov[1];
-        if (nx >= 0 && nx < n && ny >= 0 && ny < n) {
+    if (esValido(nx, ny, tablero)) {
             validos.push([nx, ny]);
-        }
+    }    
     }
     return validos;
 }
 
 // Funcion para resolver el recorrido del caballo usando backtracking
-function resolverCaballo(tablero, x, y, movimientoActual, n) {
-    // Si hemos completado todos los movimientos, hemos encontrado una solución
-    if (movimientoActual == n * n) {
+function resolverCaballo(tablero, x, y, movimientoActual) {
+
+    let totalCasillas = tablero.length * tablero[0].length;
+
+    if (movimientoActual === totalCasillas) {
         return true;
     }
+    let validos = movimientosValidos(x, y, tablero);
 
-    // Intenta todos los movimientos posibles desde la posición actual
-    for (let i = 0; i < movimientos.length; i++) {
-        let nuevoX = x + movimientos[i][0];
-        let nuevoY = y + movimientos[i][1];
+    for (let i = 0; i < validos.length; i++) {
 
-        if (esValido(nuevoX, nuevoY, tablero)) {
-            // Marca la posición como visitada con el número de movimiento
-            tablero[nuevoX][nuevoY] = movimientoActual;
+        let nuevoX = validos[i][0];
+        let nuevoY = validos[i][1];
 
-            // Recursión para el siguiente movimiento
-            if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, n)) {
-                return true;
-            }
+        tablero[nuevoX][nuevoY] = movimientoActual;
 
-            // Backtrack: desmarca la posición si no lleva a una solución
-            tablero[nuevoX][nuevoY] = -1;
+        if (
+            resolverCaballo(
+                tablero,
+                nuevoX,
+                nuevoY,
+                movimientoActual + 1
+            )
+        ) {
+            return true;
         }
+
+        tablero[nuevoX][nuevoY] = -1;
     }
 
-    //No se encontró solución desde esta posición
     return false;
+}
+
+// PRUEBAS
+
+// Tamaño del tablero
+const n = 5;
+let tablero = Array.from({ length: n }, () => Array(n).fill(-1));
+
+let inicioX = 0;
+let inicioY = 0;
+
+tablero[inicioX][inicioY] = 0;
+
+console.log("Probando recorrido del caballo");
+console.log("Tamaño del tablero:", n + "x" + n);
+console.log("Posición inicial:", "(" + inicioX + "," + inicioY + ")");
+
+let solucion = resolverCaballo(tablero, inicioX, inicioY, 1);
+
+// Mostrar resultado
+if (solucion) {
+  console.log("Solución encontrada:");
+  console.table(tablero);
+} else {
+  console.log("No se encontró solución.");
 }

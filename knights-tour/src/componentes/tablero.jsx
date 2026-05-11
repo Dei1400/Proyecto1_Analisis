@@ -1,11 +1,11 @@
-/** interfaz basica */
+
 import { useState } from "react";
 import { crearTablero, toggleObstaculo, verificarResoluble, movimientosValidos } from "../algoritmos/logicaInterfaz";
 
-// Colores según el estado de cada celda (requisito 4) - Se mantienen originales
-function getColor(valor, enRetroceso) {
+function getColor(valor, enRetroceso, esInicial) {
+  if (esInicial) return "#eb89ff";      // moradso para casilla inicial
   if (valor === -2) return "#555";        // obstáculo
-  if (valor === -1) return "#f0e9d6";     // sin visitar
+  if (valor === -1) return "#e9bcfe";     // sin visitar
   if (enRetroceso)  return "#e74c3c";     // retroceso (rojo)
   return "#2ecc71";                       // avance válido (verde)
 }
@@ -14,6 +14,8 @@ export default function Board() {
   const [n, setN] = useState(5);
   const [tablero, setTablero] = useState(() => crearTablero(5));
   const [modoObstaculo, setModoObstaculo] = useState(false);
+  const [modoSeleccionInicial, setModoSeleccionInicial] = useState(false);
+  const [posicionInicial, setPosicionInicial] = useState({ x: 0, y: 0 });
   const [mensaje, setMensaje] = useState("");
   const [corriendo, setCorriendo] = useState(false);
   
@@ -29,28 +31,38 @@ export default function Board() {
     const valor = Math.min(7, Math.max(4, Number(nuevoN)));
     setN(valor);
     setTablero(crearTablero(valor));
+    setPosicionInicial({ x: 0, y: 0 });
     setMensaje("");
   }
 
-  // Click en celda: pone/quita obstáculo si está en ese modo
+  // Click en celda: pone/quita obstáculo o selecciona casilla inicial
   function handleCeldaClick(x, y) {
     if (corriendo) return;
-    if (!modoObstaculo) return;
-    const nuevo = toggleObstaculo(tablero, x, y);
-    setTablero(nuevo);
+    
+    if (modoObstaculo) {
+      const nuevo = toggleObstaculo(tablero, x, y);
+      setTablero(nuevo);
+    } else if (modoSeleccionInicial) {
+      setPosicionInicial({ x, y });
+      setModoSeleccionInicial(false);
+      setMensaje(`Casilla inicial seleccionada: (${x}, ${y})`);
+    }
   }
 
   // Verifica si el tablero es resoluble antes de correr el algoritmo
   function handleVerificar() {
     const { posible, mensaje: msg } = verificarResoluble(
-      tablero, 0, 0, movimientosValidos
+      tablero, posicionInicial.x, posicionInicial.y, movimientosValidos
     );
-    setMensaje(posible ? "✅ El tablero parece resoluble." : `❌ ${msg}`);
+    setMensaje(posible ? "El tablero parece resoluble." : ` ${msg}`);
   }
 
   // Reinicia el tablero
   function handleReset() {
     setTablero(crearTablero(n));
+    setPosicionInicial({ x: 0, y: 0 });
+    setModoSeleccionInicial(false);
+    setModoObstaculo(false);
     setMensaje("");
     setCorriendo(false);
     setEstadisticas({
@@ -136,6 +148,25 @@ export default function Board() {
         <span style={{ fontSize: 12, color: "#9b8eae" }}>(4 mín — 7 máx)</span>
       </div>
 
+      {/* Información de casilla inicial */}
+      <div style={{ 
+        marginBottom: 16, 
+        display: "flex", 
+        gap: 10, 
+        alignItems: "center",
+        background: "#ffffff",
+        padding: "8px 16px",
+        borderRadius: 8,
+        border: `1px solid ${pastelColors.border}`
+      }}>
+        <span style={{ 
+          color: pastelColors.text,
+          fontWeight: "500"
+        }}>
+          ♞ Casilla inicial: ({posicionInicial.x}, {posicionInicial.y})
+        </span>
+      </div>
+
       {/* Controles */}
       <div style={{ 
         marginBottom: 16, 
@@ -145,21 +176,59 @@ export default function Board() {
       }}>
         <button
           onClick={() => setModoObstaculo(m => !m)}
+          disabled={corriendo || modoSeleccionInicial}
           style={{ 
             background: modoObstaculo ? "#ffb3c6" : pastelColors.buttonPrimary,
             padding: "10px 18px", 
             borderRadius: 8, 
             border: "none", 
-            cursor: "pointer",
+            cursor: corriendo || modoSeleccionInicial ? "not-allowed" : "pointer",
             fontWeight: "500",
             color: pastelColors.headerText,
             transition: "all 0.3s",
-            boxShadow: "0 2px 4px rgba(200, 180, 210, 0.3)"
+            boxShadow: "0 2px 4px rgba(200, 180, 210, 0.3)",
+            opacity: corriendo || modoSeleccionInicial ? 0.5 : 1
           }}
-          onMouseEnter={(e) => e.target.style.background = modoObstaculo ? "#ff99b3" : pastelColors.buttonPrimaryHover}
-          onMouseLeave={(e) => e.target.style.background = modoObstaculo ? "#ffb3c6" : pastelColors.buttonPrimary}
+          onMouseEnter={(e) => {
+            if (!corriendo && !modoSeleccionInicial) {
+              e.target.style.background = modoObstaculo ? "#ff99b3" : pastelColors.buttonPrimaryHover;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!corriendo && !modoSeleccionInicial) {
+              e.target.style.background = modoObstaculo ? "#ffb3c6" : pastelColors.buttonPrimary;
+            }
+          }}
         >
-          {modoObstaculo ? "Seleccionar obstáculo: ON" : "Seleccionar obstáculo: OFF"}
+          {modoObstaculo ? "Modo obstáculo: ON" : "Modo obstáculo: OFF"}
+        </button>
+        <button
+          onClick={() => setModoSeleccionInicial(m => !m)}
+          disabled={corriendo}
+          style={{ 
+            background: modoSeleccionInicial ? "#ec7cc0" : "#c594c7",
+            padding: "10px 18px", 
+            borderRadius: 8, 
+            border: "none", 
+            cursor: corriendo ? "not-allowed" : "pointer",
+            fontWeight: "500",
+            color: "#000",
+            transition: "all 0.3s",
+            boxShadow: "0 2px 4px rgba(255, 235, 59, 0.3)",
+            opacity: corriendo ? 0.5 : 1
+          }}
+          onMouseEnter={(e) => {
+            if (!corriendo) {
+              e.target.style.background = modoSeleccionInicial ? "#ec7cc0" : "#c594c7";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!corriendo) {
+              e.target.style.background = modoSeleccionInicial ? "#c594c7": "#ec7cc0" ;
+            }
+          }}
+        >
+          {modoSeleccionInicial ? "♞ Seleccionar casilla inicial: ON" : "♘ Seleccionar casilla inicial: OFF"}
         </button>
         <button 
           onClick={handleVerificar} 
@@ -224,36 +293,40 @@ export default function Board() {
         boxShadow: `0 4px 12px rgba(180, 160, 210, 0.2)`
       }}>
         {tablero.map((fila, x) =>
-          fila.map((valor, y) => (
-            <div
-              key={`${x}-${y}`}
-              onClick={() => handleCeldaClick(x, y)}
-              style={{
-                width: 56, height: 56,
-                background: getColor(valor, false),
-                border: "1px solid #ddd",
-                borderRadius: 4,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: valor >= 0 ? 16 : 12,
-                fontWeight: "bold",
-                cursor: modoObstaculo ? "pointer" : "default",
-                userSelect: "none",
-                transition: "transform 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                if (modoObstaculo) {
-                  e.target.style.transform = "scale(1.1)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "scale(1)";
-              }}
-            >
-              {valor === -2 ? "✕" : valor >= 0 ? valor : ""}
-            </div>
-          ))
+          fila.map((valor, y) => {
+            const esInicial = x === posicionInicial.x && y === posicionInicial.y;
+            return (
+              <div
+                key={`${x}-${y}`}
+                onClick={() => handleCeldaClick(x, y)}
+                style={{
+                  width: 56, height: 56,
+                  background: getColor(valor, false, esInicial),
+                  border: "1px solid #ddd",
+                  borderRadius: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: esInicial ? 26 : valor >= 0 ? 16 : 12,
+                  color: esInicial ? "#000" : "inherit",
+                  fontWeight: "bold",
+                  cursor: (modoObstaculo || modoSeleccionInicial) && !corriendo ? "pointer" : "default",
+                  userSelect: "none",
+                  transition: "transform 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  if ((modoObstaculo || modoSeleccionInicial) && !corriendo) {
+                    e.target.style.transform = "scale(1.1)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = "scale(1)";
+                }}
+              >
+                {esInicial ? "♞" : valor === -2 ? "✕" : valor >= 0 ? valor : ""}
+              </div>
+            );
+          })
         )}
       </div>
 

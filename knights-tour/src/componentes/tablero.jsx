@@ -1,6 +1,13 @@
-
 import { useState } from "react";
-import { crearTablero, toggleObstaculo, verificarResoluble, movimientosValidos } from "../algoritmos/logicaInterfaz";
+import {
+  crearTablero,
+  toggleObstaculo,
+  verificarResoluble,
+  movimientosValidos,
+  iniciarRecorrido,
+  validarPosicionInicial,
+} from "../algoritmos/logicaInterfaz";
+
 
 function getColor(valor, enRetroceso, esInicial) {
   if (esInicial) return "#eb89ff";      // moradso para casilla inicial
@@ -55,6 +62,27 @@ export default function Board() {
       tablero, posicionInicial.x, posicionInicial.y, movimientosValidos
     );
     setMensaje(posible ? "El tablero parece resoluble." : ` ${msg}`);
+  }
+
+  // Ejecuta el algoritmo usando la lógica de logicaInterfaz
+  function handleResolver() {
+    if (corriendo) return;
+
+    const validacion = validarPosicionInicial(posicionInicial.x, posicionInicial.y, n);
+    if (!validacion.valido) {
+      setMensaje(`❌ ${validacion.mensaje}`);
+      return;
+    }
+
+    setCorriendo(true);
+    setMensaje("Resolviendo el recorrido...");
+
+    const resultado = iniciarRecorrido(tablero, posicionInicial.x, posicionInicial.y);
+
+    setTablero(resultado.tablero);
+    setEstadisticas(resultado.estadisticas);
+    setMensaje(resultado.posible ? "✅ Solución encontrada." : `❌ ${resultado.mensaje}`);
+    setCorriendo(false);
   }
 
   // Reinicia el tablero
@@ -247,6 +275,30 @@ export default function Board() {
           onMouseLeave={(e) => e.target.style.background = pastelColors.buttonSecondary}
         >
             Verificar tablero
+        </button>
+        <button 
+          onClick={handleResolver} 
+          disabled={corriendo}
+          style={{ 
+            padding: "10px 18px", 
+            borderRadius: 8, 
+            border: "none", 
+            cursor: corriendo ? "not-allowed" : "pointer",
+            background: "#a8d5ff",
+            color: "#000",
+            fontWeight: "500",
+            transition: "all 0.3s",
+            boxShadow: "0 2px 4px rgba(140, 170, 210, 0.3)",
+            opacity: corriendo ? 0.6 : 1
+          }}
+          onMouseEnter={(e) => {
+            if (!corriendo) e.target.style.background = "#7fb7ff";
+          }}
+          onMouseLeave={(e) => {
+            if (!corriendo) e.target.style.background = "#a8d5ff";
+          }}
+        >
+          {corriendo ? "Resolviendo..." : "Resolver Tour"}
         </button>
         <button 
           onClick={handleReset} 

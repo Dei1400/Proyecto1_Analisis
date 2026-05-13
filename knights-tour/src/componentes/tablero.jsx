@@ -30,6 +30,7 @@ export default function Board() {
   
   // Estado para animación paso a paso
   const [animando, setAnimando] = useState(false);
+  const [velocidadAnimacion, setVelocidadAnimacion] = useState(150); // 150ms normal, 30ms rápida
   const [indiceHistorial, setIndiceHistorial] = useState(0);
   const [historialCompleto, setHistorialCompleto] = useState([]);
   const [tableroAnimado, setTableroAnimado] = useState(() => crearTablero(5));
@@ -118,7 +119,6 @@ export default function Board() {
     setModoSeleccionInicial(false);
   }
 
-  // Click en celda: pone/quita obstáculo o selecciona casilla inicial
   function handleCeldaClick(x, y) {
     if (corriendo || animando) return;
     
@@ -129,6 +129,10 @@ export default function Board() {
       setSolucionFinal(null);
       setMensaje(`Obstáculo ${tablero[x][y] === -2 ? 'eliminado' : 'agregado'} en (${x}, ${y})`);
     } else if (modoSeleccionInicial) {
+      if (tablero[x][y] === -2) {
+        setMensaje("No puedes colocar el caballo en un obstáculo.");
+        return;
+      }
       setPosicionInicial({ x, y });
       setPosicionActualCaballo({ x, y });
       setModoSeleccionInicial(false);
@@ -143,11 +147,11 @@ export default function Board() {
     const { posible, mensaje: msg } = verificarResoluble(
       tablero, posicionInicial.x, posicionInicial.y, movimientosValidos
     );
-    setMensaje(posible ? "✓ El tablero parece resoluble." : `✗ ${msg}`);
+    setMensaje(posible ? "El tablero es resoluble." : `✗ ${msg}`);
   }
 
-  // Mostrar animación
-  function handleMostrarAnimacion() {
+  // Mostrar animación normal
+  function handleMostrarAnimacionNormal() {
     if (!historialCompleto || historialCompleto.length === 0) {
       setMensaje("No hay una solución guardada. Primero ejecuta 'Resolver Tour'.");
       return;
@@ -155,11 +159,29 @@ export default function Board() {
     
     setMostrarSolucionFinal(false);
     setAnimando(true);
+    setVelocidadAnimacion(150); // Velocidad normal: 150ms
     setIndiceHistorial(0);
     setTableroAnimado(parametrosPrevios?.tablero.map(fila => [...fila]) || crearTablero(n));
     setCeldasEnRetroceso(new Set());
     setPosicionActualCaballo(posicionInicial);
-    setMensaje("Animando recorrido...");
+    setMensaje("Animando recorrido (velocidad normal)...");
+  }
+
+  // Mostrar animación rápida
+  function handleMostrarAnimacionRapida() {
+    if (!historialCompleto || historialCompleto.length === 0) {
+      setMensaje("No hay una solución guardada. Primero ejecuta 'Resolver Tour'.");
+      return;
+    }
+    
+    setMostrarSolucionFinal(false);
+    setAnimando(true);
+    setVelocidadAnimacion(30); // Velocidad rápida: 30ms
+    setIndiceHistorial(0);
+    setTableroAnimado(parametrosPrevios?.tablero.map(fila => [...fila]) || crearTablero(n));
+    setCeldasEnRetroceso(new Set());
+    setPosicionActualCaballo(posicionInicial);
+    setMensaje("Animando recorrido (velocidad rápida)...");
   }
 
   // Effect para animar el historial paso a paso
@@ -186,13 +208,15 @@ export default function Board() {
           nuevasRetrocesos.add(`${paso.x},${paso.y}`);
           setPosicionActualCaballo({ x: paso.x, y: paso.y });
           
+          // Para animación rápida, reducir el tiempo de visualización del retroceso
+          const tiempoRetroceso = velocidadAnimacion === 150 ? 600 : 120;
           setTimeout(() => {
             setCeldasEnRetroceso(prev => {
               const actualizado = new Set(prev);
               actualizado.delete(`${paso.x},${paso.y}`);
               return actualizado;
             });
-          }, 600);
+          }, tiempoRetroceso);
         }
 
         setTableroAnimado(nuevoTablero);
@@ -208,15 +232,15 @@ export default function Board() {
                              historialCompleto.filter(p => p.tipo === "avance").length === contarCasillasLibres(tablero);
         
         if (tieneSolucion) {
-          setMensaje("✓ Animación completada - Solución encontrada");
+          setMensaje("Animación completada - Solución encontrada");
         } else {
-          setMensaje("✗ Animación completada - Sin solución (última posición del caballo mostrada)");
+          setMensaje("Animación completada - Sin solución (última posición del caballo mostrada)");
         }
       }
-    }, 150); // Velocidad media
+    }, velocidadAnimacion);
 
     return () => clearTimeout(delay);
-  }, [animando, indiceHistorial, historialCompleto, tableroAnimado, celdasEnRetroceso, tablero]);
+  }, [animando, indiceHistorial, historialCompleto, tableroAnimado, celdasEnRetroceso, tablero, velocidadAnimacion]);
 
   // Ejecuta el algoritmo
   function handleResolver() {
@@ -254,8 +278,8 @@ export default function Board() {
     setCorriendo(false);
     
     setMensaje(resultado.posible 
-      ? "✓ Solución encontrada. Presiona 'Mostrar Animación' para ver el recorrido." 
-      : "✗ No se encontró solución. Presiona 'Mostrar Animación' para ver el intento.");
+      ? "Solución encontrada. Usa los botones de animación para ver el recorrido." 
+      : "No se encontró solución. Usa los botones de animación para ver el intento.");
   }
 
   // Función auxiliar para contar casillas libres
@@ -507,24 +531,47 @@ export default function Board() {
             {corriendo ? "Resolviendo..." : "Resolver Tour"}
           </button>
           
-          <button 
-            onClick={handleMostrarAnimacion}
-            disabled={animando || !historialCompleto || historialCompleto.length === 0}
-            style={{ 
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: (animando || !historialCompleto || historialCompleto.length === 0) ? "not-allowed" : "pointer",
-              background: "#ffd966",
-              color: "#000",
-              fontWeight: "500",
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(255, 200, 100, 0.3)",
-              opacity: (animando || !historialCompleto || historialCompleto.length === 0) ? 0.6 : 1
-            }}
-          > 
-            {animando ? "Animando..." : "Mostrar Animación"}
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button 
+              onClick={handleMostrarAnimacionNormal}
+              disabled={animando || !historialCompleto || historialCompleto.length === 0}
+              style={{ 
+                flex: 1,
+                padding: "10px 18px", 
+                borderRadius: 8, 
+                border: "none", 
+                cursor: (animando || !historialCompleto || historialCompleto.length === 0) ? "not-allowed" : "pointer",
+                background: "#ffd966",
+                color: "#000",
+                fontWeight: "500",
+                transition: "all 0.3s",
+                boxShadow: "0 2px 4px rgba(255, 200, 100, 0.3)",
+                opacity: (animando || !historialCompleto || historialCompleto.length === 0) ? 0.6 : 1
+              }}
+            > 
+              {animando && velocidadAnimacion === 150 ? "Animando..." : "Normal"}
+            </button>
+            
+            <button 
+              onClick={handleMostrarAnimacionRapida}
+              disabled={animando || !historialCompleto || historialCompleto.length === 0}
+              style={{ 
+                flex: 1,
+                padding: "10px 18px", 
+                borderRadius: 8, 
+                border: "none", 
+                cursor: (animando || !historialCompleto || historialCompleto.length === 0) ? "not-allowed" : "pointer",
+                background: "#98d8ca",
+                color: "#000",
+                fontWeight: "500",
+                transition: "all 0.3s",
+                boxShadow: "0 2px 4px rgba(100, 200, 180, 0.3)",
+                opacity: (animando || !historialCompleto || historialCompleto.length === 0) ? 0.6 : 1
+              }}
+            > 
+              {animando && velocidadAnimacion === 30 ? " Animando..." : "Rápida"}
+            </button>
+          </div>
           
           <button 
             onClick={handleReset} 
@@ -563,7 +610,7 @@ export default function Board() {
             fontSize: 16,
             letterSpacing: 1,
           }}>
-            Estadísticas
+           Estadísticas
           </div>
 
           {[

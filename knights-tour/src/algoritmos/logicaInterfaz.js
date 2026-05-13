@@ -77,24 +77,84 @@ export function agregarObstaculos(tablero, obstaculos) {
     return copia;
 }
 
+function dentroTablero(x, y, tablero) {
+    return (
+        x >= 0 &&
+        x < tablero.length &&
+        y >= 0 &&
+        y < tablero[0].length
+    );
+}
+
 function esValido(x, y, tablero) {
     return (
-        x >= 0 && x < tablero.length &&
-        y >= 0 && y < tablero[0].length &&
+        dentroTablero(x, y, tablero) &&
         tablero[x][y] === -1
     );
 }
 
-export function movimientosValidos(x, y, tablero) {
+// Nueva función: verifica si el movimiento usa un obstáculo como puente
+function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
+    let dx = nx - x;
+    let dy = ny - y;
+
+    let sx = Math.sign(dx);
+    let sy = Math.sign(dy);
+
+    let casillasDelMovimiento = [];
+
+    // Movimiento en L: 2 en X, 1 en Y
+    if (Math.abs(dx) === 2 && Math.abs(dy) === 1) {
+        casillasDelMovimiento = [
+            [x + sx, y],
+            [x + 2 * sx, y]
+        ];
+    }
+
+    // Movimiento en L: 1 en X, 2 en Y
+    if (Math.abs(dx) === 1 && Math.abs(dy) === 2) {
+        casillasDelMovimiento = [
+            [x, y + sy],
+            [x, y + 2 * sy]
+        ];
+    }
+
+    // Verificar si alguna casilla intermedia es un obstáculo
+    for (let casilla of casillasDelMovimiento) {
+        let cx = casilla[0];
+        let cy = casilla[1];
+
+        if (dentroTablero(cx, cy, tablero) && tablero[cx][cy] === -2) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+export function movimientosValidos(x, y, tablero, estadisticas = null) {
     let validos = [];
 
     for (let mov of movimientos) {
         let nx = x + mov[0];
         let ny = y + mov[1];
 
-        if (esValido(nx, ny, tablero)) {
-            validos.push([nx, ny]);
+        // Contar movimiento intentado si se proporciona estadisticas
+        if (estadisticas) {
+            estadisticas.movimientosIntentados++;
         }
+
+        // Verificar si la casilla es válida (dentro del tablero, no visitada, no obstáculo)
+        if (!esValido(nx, ny, tablero)) {
+            continue;
+        }
+
+        // Verificar si el movimiento usa un obstáculo como puente
+        if (usaObstaculoComoPuente(x, y, nx, ny, tablero)) {
+            continue;
+        }
+
+        validos.push([nx, ny]);
     }
 
     return validos;
@@ -116,7 +176,6 @@ function contarCasillasLibres(tablero) {
 
 export function verificarResoluble(tablero, startX, startY, getMovimientos) {
     const n = tablero.length;
-    const celdasLibres = tablero.flat().filter(c => c !== -2).length;
 
     if (startX < 0 || startX >= n || startY < 0 || startY >= n) {
         return { posible: false, mensaje: "La posición inicial está fuera del tablero." };
@@ -126,21 +185,64 @@ export function verificarResoluble(tablero, startX, startY, getMovimientos) {
         return { posible: false, mensaje: "La casilla inicial es un obstáculo." };
     }
 
-    if (celdasLibres < Math.max(1, Math.floor(n * n * 0.3))) {
-        return { posible: false, mensaje: "Hay demasiados obstáculos en el tablero." };
+    // Verificación real: correr el algoritmo completo
+    const resultado = iniciarRecorrido(tablero, startX, startY);
+    
+    return {
+        posible: resultado.posible,
+        mensaje: resultado.posible ? "" : "No existe solución para este tablero con esta posición inicial."
+    };
+}
+
+function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas, estadisticas, historial) {
+    // Si ya visitó todas las casillas libres
+    if (movimientoActual === totalCasillas) {
+        return true;
     }
 
-    const movs = getMovimientos(startX, startY, tablero);
-    if (movs.length === 0) {
-        return { posible: false, mensaje: "El caballo no tiene movimientos desde la posición inicial." };
+    // Obtener movimientos válidos (pasando estadisticas para contar)
+    let validos = movimientosValidos(x, y, tablero, estadisticas);
+
+    // Probar todos los movimientos válidos
+    for (let i = 0; i < validos.length; i++) {
+        let nuevoX = validos[i][0];
+        let nuevoY = validos[i][1];
+
+        // Marcar casilla
+        tablero[nuevoX][nuevoY] = movimientoActual;
+        
+        historial.push({
+            tipo: "avance",
+            x: nuevoX,
+            y: nuevoY,
+            paso: movimientoActual
+        });
+
+        // Backtracking recursivo
+        if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, totalCasillas, estadisticas, historial)) {
+            return true;
+        }
+
+        // Retroceso
+        estadisticas.retrocesos++;
+        
+        historial.push({
+            tipo: "retroceso",
+            x: nuevoX,
+            y: nuevoY,
+            paso: movimientoActual
+        });
+
+        tablero[nuevoX][nuevoY] = -1;
     }
 
-    return { posible: true, mensaje: "" };
+    return false;
 }
 
 export function iniciarRecorrido(tablero, inicioX, inicioY) {
     const n = tablero.length;
     const validacion = validarPosicionInicial(inicioX, inicioY, n);
+    
     if (!validacion.valido) {
         return {
             posible: false,
@@ -163,6 +265,7 @@ export function iniciarRecorrido(tablero, inicioX, inicioY) {
     };
     const historial = [];
 
+    // Verificar que la casilla inicial no sea obstáculo
     if (copia[inicioX][inicioY] === -2) {
         return {
             posible: false,
@@ -174,39 +277,22 @@ export function iniciarRecorrido(tablero, inicioX, inicioY) {
     }
 
     const totalCasillas = contarCasillasLibres(copia);
+    
+    // Marcar posición inicial
     copia[inicioX][inicioY] = 0;
-    historial.push({ tipo: "inicio", x: inicioX, y: inicioY, paso: 0 });
+    historial.push({ 
+        tipo: "inicio", 
+        x: inicioX, 
+        y: inicioY, 
+        paso: 0 
+    });
 
-    function resolver(x, y, movimientoActual) {
-        if (movimientoActual === totalCasillas) {
-            return true;
-        }
-
-        let validos = movimientosValidos(x, y, copia);
-
-        for (let i = 0; i < validos.length; i++) {
-            estadisticas.movimientosIntentados++;
-
-            let nuevoX = validos[i][0];
-            let nuevoY = validos[i][1];
-
-            copia[nuevoX][nuevoY] = movimientoActual;
-            historial.push({ tipo: "avance", x: nuevoX, y: nuevoY, paso: movimientoActual });
-
-            if (resolver(nuevoX, nuevoY, movimientoActual + 1)) {
-                return true;
-            }
-
-            estadisticas.retrocesos++;
-            historial.push({ tipo: "retroceso", x: nuevoX, y: nuevoY, paso: movimientoActual });
-            copia[nuevoX][nuevoY] = -1;
-        }
-
-        return false;
-    }
-
+    // Medir tiempo de ejecución
     const inicioTiempo = performance.now();
-    const posible = resolver(inicioX, inicioY, 1);
+    
+    // Ejecutar el algoritmo recursivo
+    const posible = resolverCaballo(copia, inicioX, inicioY, 1, totalCasillas, estadisticas, historial);
+    
     estadisticas.tiempo = performance.now() - inicioTiempo;
 
     return {

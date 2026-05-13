@@ -29,11 +29,14 @@ function dentroTablero(x, y, n) {
 // validar que una posición (x, y) sea un obstáculo
 function esObstaculo(x, y, obstaculos) {
     return obstaculos.some(
-        obstaculo => obstaculo[0] === x && obstaculo[1] === y
+        obstaculo =>
+            obstaculo[0] === x &&
+            obstaculo[1] === y
     );
 }
 // validar que una posición (x, y) sea válida para moverse (dentro del tablero y sin obstáculo)
 function usaObstaculoComoPuente(x, y, nx, ny, obstaculos, n) {
+
     let dx = nx - x;
     let dy = ny - y;
 
@@ -42,14 +45,22 @@ function usaObstaculoComoPuente(x, y, nx, ny, obstaculos, n) {
 
     let casillasDelMovimiento = [];
 
-    if (Math.abs(dx) === 2 && Math.abs(dy) === 1) {
+    if (
+        Math.abs(dx) === 2 &&
+        Math.abs(dy) === 1
+    ) {
+
         casillasDelMovimiento = [
             [x + sx, y],
             [x + 2 * sx, y]
         ];
     }
 
-    if (Math.abs(dx) === 1 && Math.abs(dy) === 2) {
+    if (
+        Math.abs(dx) === 1 &&
+        Math.abs(dy) === 2
+    ) {
+
         casillasDelMovimiento = [
             [x, y + sy],
             [x, y + 2 * sy]
@@ -57,6 +68,7 @@ function usaObstaculoComoPuente(x, y, nx, ny, obstaculos, n) {
     }
 
     for (let casilla of casillasDelMovimiento) {
+
         let cx = casilla[0];
         let cy = casilla[1];
 
@@ -64,15 +76,14 @@ function usaObstaculoComoPuente(x, y, nx, ny, obstaculos, n) {
             dentroTablero(cx, cy, n) &&
             esObstaculo(cx, cy, obstaculos)
         ) {
+
             return true;
         }
     }
 
     return false;
 }
-// función principal para contar caminos usando programación dinámica
-function contarCaminosDP(n, inicioX, inicioY, destinoX, destinoY, k, obstaculos) {
-
+function contarCaminosDP(n,inicioX,inicioY,destinoX,destinoY,k,obstaculos) {
     if (esObstaculo(inicioX, inicioY, obstaculos) || esObstaculo(destinoX, destinoY, obstaculos)) {
         return 0;
     }
@@ -85,15 +96,20 @@ function contarCaminosDP(n, inicioX, inicioY, destinoX, destinoY, k, obstaculos)
     dp[inicioX][inicioY] = 1;
 
     for (let paso = 1; paso <= k; paso++) {
+
         let siguiente = Array.from(
             { length: n },
             () => Array(n).fill(0)
         );
 
         for (let x = 0; x < n; x++) {
+
             for (let y = 0; y < n; y++) {
+
                 if (dp[x][y] > 0) {
+
                     for (let mov of movimientos) {
+
                         let nx = x + mov[0];
                         let ny = y + mov[1];
 
@@ -101,14 +117,13 @@ function contarCaminosDP(n, inicioX, inicioY, destinoX, destinoY, k, obstaculos)
                             continue;
                         }
 
-                        if (esObstaculo(nx, ny, obstaculos)) {
+                        if (esObstaculo( nx,ny,obstaculos)) {
                             continue;
                         }
 
                         if (usaObstaculoComoPuente(x,y,nx,ny,obstaculos,n)) {
                             continue;
                         }
-
                         siguiente[nx][ny] += dp[x][y];
                     }
                 }
@@ -121,48 +136,97 @@ function contarCaminosDP(n, inicioX, inicioY, destinoX, destinoY, k, obstaculos)
     return dp[destinoX][destinoY];
 }
 
+function imprimirTablero(n,inicioX,inicioY,destinoX,destinoY,obstaculos) {
+    let tablero = Array.from(
+        { length: n },
+        () => Array(n).fill(".")
+    );
+
+    for (let obstaculo of obstaculos) {
+
+        tablero[
+            obstaculo[0]
+        ][
+            obstaculo[1]
+        ] = "X";
+    }
+
+    tablero[inicioX][inicioY] = "A";
+
+    tablero[destinoX][destinoY] = "B";
+
+    console.log("\n=== TABLERO ===");
+
+    console.table(tablero);
+}
+
 async function main() {
+
     const n = parseInt(
-        await preguntar("Digite el tamaño N del tablero: ")
+        await preguntar(
+            "Digite el tamaño N del tablero: "
+        )
     );
 
     const inicioX = parseInt(
-        await preguntar("Digite fila inicial A: ")
+        await preguntar(
+            "Digite fila inicial A: "
+        )
     );
 
     const inicioY = parseInt(
-        await preguntar("Digite columna inicial A: ")
+        await preguntar(
+            "Digite columna inicial A: "
+        )
     );
 
     const destinoX = parseInt(
-        await preguntar("Digite fila destino B: ")
+        await preguntar(
+            "Digite fila destino B: "
+        )
     );
 
     const destinoY = parseInt(
-        await preguntar("Digite columna destino B: ")
+        await preguntar(
+            "Digite columna destino B: "
+        )
     );
 
     const k = parseInt(
-        await preguntar("Digite cantidad exacta de movimientos K: ")
+        await preguntar(
+            "Digite cantidad exacta de movimientos K: "
+        )
     );
 
     const cantidadObstaculos = parseInt(
-        await preguntar("Digite cantidad de obstáculos: ")
+        await preguntar(
+            "Digite cantidad de obstáculos: "
+        )
     );
 
     let obstaculos = [];
 
-    for (let i = 0; i < cantidadObstaculos; i++) {
+    for (
+        let i = 0;
+        i < cantidadObstaculos;
+        i++
+    ) {
+
         let x = parseInt(
-            await preguntar(`Fila obstáculo ${i + 1}: `)
+            await preguntar(
+                `Fila obstáculo ${i + 1}: `
+            )
         );
 
         let y = parseInt(
-            await preguntar(`Columna obstáculo ${i + 1}: `)
+            await preguntar(
+                `Columna obstáculo ${i + 1}: `
+            )
         );
 
         obstaculos.push([x, y]);
     }
+    imprimirTablero(n,inicioX,inicioY,destinoX,destinoY,obstaculos);
 
     const resultado = contarCaminosDP(
         n,
@@ -174,13 +238,39 @@ async function main() {
         obstaculos
     );
 
-    console.log("\n=== CONTEO DE CAMINOS CON PROGRAMACIÓN DINÁMICA ===");
-    console.log("Tablero:", n + "x" + n);
-    console.log("Inicio A:", "(" + inicioX + "," + inicioY + ")");
-    console.log("Destino B:", "(" + destinoX + "," + destinoY + ")");
-    console.log("Movimientos exactos K:", k);
-    console.log("Obstáculos:", obstaculos);
-    console.log("Cantidad de caminos:", resultado);
+    console.log(
+        "\n=== CONTEO DE CAMINOS CON PROGRAMACIÓN DINÁMICA ==="
+    );
+
+    console.log(
+        "Tablero:",
+        n + "x" + n
+    );
+
+    console.log(
+        "Inicio A:",
+        "(" + inicioX + "," + inicioY + ")"
+    );
+
+    console.log(
+        "Destino B:",
+        "(" + destinoX + "," + destinoY + ")"
+    );
+
+    console.log(
+        "Movimientos exactos K:",
+        k
+    );
+
+    console.log(
+        "Obstáculos:",
+        obstaculos
+    );
+
+    console.log(
+        "Cantidad de caminos:",
+        resultado
+    );
 
     rl.close();
 }

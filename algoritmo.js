@@ -23,6 +23,8 @@ let estadisticas = {
 };
 
 let historial = [];
+let mejorTablero = null;
+let mayorPasoAlcanzado = 0;
 
 function preguntar(texto) {
     return new Promise(resolve => {
@@ -113,23 +115,13 @@ function movimientosValidos(x, y, tablero) {
         estadisticas.movimientosIntentados++;
 
         // Si se sale, cae en obstáculo o visitada
-        if (
-            !esValido(nx, ny, tablero)
-        ) {
+        if (!esValido(nx, ny, tablero)) {
 
             continue;
         }
 
         // Si usa obstáculo como puente
-        if (
-            usaObstaculoComoPuente(
-                x,
-                y,
-                nx,
-                ny,
-                tablero
-            )
-        ) {
+        if (usaObstaculoComoPuente(x,y,nx,ny,tablero)) {
 
             continue;
         }
@@ -160,9 +152,7 @@ function contarCasillasLibres(tablero) {
 
         for (let y = 0; y < tablero[0].length; y++) {
 
-            if (
-                tablero[x][y] !== -2
-            ) {
+            if (tablero[x][y] !== -2) {
 
                 total++;
             }
@@ -171,19 +161,26 @@ function contarCasillasLibres(tablero) {
 
     return total;
 }
+// Función para copiar el tablero (para guardar el mejor estado)
+function copiarTablero(tablero) {
 
-function resolverCaballo(
-    tablero,
-    x,
-    y,
-    movimientoActual,
-    totalCasillas
-) {
+    return tablero.map(
+        fila => [...fila]
+    );
+}
+
+function resolverCaballo(tablero,x,y,movimientoActual,totalCasillas) {
+
+    if (movimientoActual >mayorPasoAlcanzado) {
+        mayorPasoAlcanzado =
+            movimientoActual;
+
+        mejorTablero =
+            copiarTablero(tablero);
+    }
 
     // Si ya visitó todas las casillas libres
-    if (
-        movimientoActual === totalCasillas
-    ) {
+    if (movimientoActual === totalCasillas) {
 
         return true;
     }
@@ -206,7 +203,6 @@ function resolverCaballo(
             movimientoActual;
 
         historial.push({
-
             tipo: "avance",
             x: nuevoX,
             y: nuevoY,
@@ -214,17 +210,7 @@ function resolverCaballo(
         });
 
         // Backtracking
-        if (
-
-            resolverCaballo(
-                tablero,
-                nuevoX,
-                nuevoY,
-                movimientoActual + 1,
-                totalCasillas
-            )
-        ) {
-
+        if (resolverCaballo(tablero,nuevoX,nuevoY,movimientoActual + 1,totalCasillas)) {
             return true;
         }
 
@@ -232,7 +218,6 @@ function resolverCaballo(
         estadisticas.retrocesos++;
 
         historial.push({
-
             tipo: "retroceso",
             x: nuevoX,
             y: nuevoY,
@@ -388,6 +373,11 @@ async function main() {
         paso: 0
     });
 
+    mejorTablero =
+        copiarTablero(tablero);
+
+    mayorPasoAlcanzado = 1;
+
     let totalCasillas =
         contarCasillasLibres(tablero);
 
@@ -439,10 +429,21 @@ async function main() {
     } else {
 
         console.log(
-            "\nNo se encontró solución."
+            "\nNo se encontró solución completa."
         );
 
-        console.table(tablero);
+        console.log(
+            "Mayor cantidad de pasos alcanzados:",
+            mayorPasoAlcanzado,
+            "de",
+            totalCasillas
+        );
+
+        console.log(
+            "\nMejor recorrido alcanzado:"
+        );
+
+        console.table(mejorTablero);
     }
 
     console.log(

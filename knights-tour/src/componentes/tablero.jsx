@@ -347,28 +347,30 @@ export default function Board() {
   const tableroAMostrar = animando ? tableroAnimado : (mostrarSolucionFinal && solucionFinal ? solucionFinal.tablero : tablero);
 
   return (
-    <div style={{ 
-      display: "flex",
-      gap: 30,
-      padding: 24, 
-      fontFamily: "sans-serif",
-      background: pastelColors.background,
-      borderRadius: 15,
-      maxWidth: 1200,
-      margin: "20px auto",
-      boxShadow: "0 4px 15px rgba(180, 160, 200, 0.2)"
-    }}>
-      {/* Panel izquierdo - Controles y estadísticas */}
       <div style={{ 
-        flex: 1,
-        minWidth: 280,
         display: "flex",
-        flexDirection: "column",
-        gap: 20
+        gap: 16,
+        padding: 16, 
+        fontFamily: "sans-serif",
+        background: pastelColors.background,
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        margin: 0,
       }}>
+      {/* Panel izquierdo - Controles y estadísticas */}
+    <div style={{ 
+      flex: 1,
+      minWidth: 240,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      overflowY: "auto",
+    }}>
         <h2 style={{ 
           color: pastelColors.headerText,
-          fontSize: 28,
+          fontSize: 20,
           textAlign: "center",
           fontWeight: "600",
           margin: 0
@@ -645,7 +647,8 @@ export default function Board() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 16
+        gap: 16,
+        overflow: "hidden",
       }}>
         {/* Mensaje de estado */}
         {mensaje && (

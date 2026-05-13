@@ -4,6 +4,7 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
+
 const movimientos = [
     [-2, -1],
     [-2, +1],
@@ -14,47 +15,127 @@ const movimientos = [
     [+2, -1],
     [+2, +1],
 ];
-// Estadísticas
+
 let estadisticas = {
     movimientosIntentados: 0,
     retrocesos: 0,
     tiempo: 0
 };
 
-// Guarda los pasos del proceso
-let historial = [];
+let mejorTablero = null;
+let mayorPasoAlcanzado = 0;
 
 function preguntar(texto) {
     return new Promise(resolve => {
         rl.question(texto, respuesta => resolve(respuesta));
     });
 }
+
+function dentroTablero(x, y, tablero) {
+    return (
+        x >= 0 &&
+        x < tablero.length &&
+        y >= 0 &&
+        y < tablero[0].length
+    );
+}
+
 function esValido(x, y, tablero) {
     return (
-        x >= 0 && x < tablero.length &&
-        y >= 0 && y < tablero[0].length &&
+        dentroTablero(x, y, tablero) &&
         tablero[x][y] === -1
     );
 }
 
+function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
+
+    let dx = nx - x;
+    let dy = ny - y;
+
+    let sx = Math.sign(dx);
+    let sy = Math.sign(dy);
+
+    let casillasDelMovimiento = [];
+
+    if (
+        Math.abs(dx) === 2 &&
+        Math.abs(dy) === 1
+    ) {
+
+        casillasDelMovimiento = [
+
+            [x + sx, y],
+            [x + 2 * sx, y]
+
+        ];
+    }
+
+    if (
+        Math.abs(dx) === 1 &&
+        Math.abs(dy) === 2
+    ) {
+
+        casillasDelMovimiento = [
+
+            [x, y + sy],
+            [x, y + 2 * sy]
+
+        ];
+    }
+
+    for (let casilla of casillasDelMovimiento) {
+
+        let cx = casilla[0];
+        let cy = casilla[1];
+
+        if (
+
+            dentroTablero(cx, cy, tablero) &&
+            tablero[cx][cy] === -2
+        ) {
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function movimientosValidos(x, y, tablero) {
+
     let validos = [];
 
+    // Revisa los 8 movimientos
     for (let mov of movimientos) {
+
         let nx = x + mov[0];
         let ny = y + mov[1];
 
-        if (esValido(nx, ny, tablero)) {
-            validos.push([nx, ny]);
+        estadisticas.movimientosIntentados++;
+
+        // Si se sale, cae en obstáculo o visitada
+        if (!esValido(nx, ny, tablero)) {
+
+            continue;
         }
+
+        // Si usa obstáculo como puente
+        if (usaObstaculoComoPuente(x,y,nx,ny,tablero)) {
+
+            continue;
+        }
+
+        // Si cumple todo, se guarda
+        validos.push([nx, ny]);
     }
 
     return validos;
 }
 
-// CAMBIO: función para agregar obstáculos
 function agregarObstaculos(tablero, obstaculos) {
+
     for (let obstaculo of obstaculos) {
+
         let x = obstaculo[0];
         let y = obstaculo[1];
 
@@ -63,11 +144,15 @@ function agregarObstaculos(tablero, obstaculos) {
 }
 
 function contarCasillasLibres(tablero) {
+
     let total = 0;
 
     for (let x = 0; x < tablero.length; x++) {
+
         for (let y = 0; y < tablero[0].length; y++) {
+
             if (tablero[x][y] !== -2) {
+
                 total++;
             }
         }
@@ -75,8 +160,17 @@ function contarCasillasLibres(tablero) {
 
     return total;
 }
+// Función para copiar el tablero (para guardar el mejor estado)
+function copiarTablero(tablero) {
+    return tablero.map(fila => [...fila]);
+}
 
-function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas) {
+function resolverCaballo(tablero,x,y,movimientoActual,totalCasillas) {
+    if (movimientoActual > mayorPasoAlcanzado) {
+        mayorPasoAlcanzado = movimientoActual;
+        mejorTablero = copiarTablero(tablero);
+    }
+
     if (movimientoActual === totalCasillas) {
         return true;
     }
@@ -84,39 +178,31 @@ function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas) {
     let validos = movimientosValidos(x, y, tablero);
 
     for (let i = 0; i < validos.length; i++) {
-
-        estadisticas.movimientosIntentados++;
-
         let nuevoX = validos[i][0];
         let nuevoY = validos[i][1];
 
         tablero[nuevoX][nuevoY] = movimientoActual;
-        historial.push({
-        tipo: "avance",
-        x: nuevoX,
-        y: nuevoY,
-        paso: movimientoActual
-    });
 
-        if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, totalCasillas)) {
+        if (
+            resolverCaballo(
+                tablero,
+                nuevoX,
+                nuevoY,
+                movimientoActual + 1,
+                totalCasillas
+            )
+        ) {
             return true;
         }
 
         estadisticas.retrocesos++;
 
-        historial.push({
-            tipo: "retroceso",
-            x: nuevoX,
-            y: nuevoY,
-            paso: movimientoActual
-        });
         tablero[nuevoX][nuevoY] = -1;
     }
 
     return false;
 }
 
-// PRUEBAS
 
 async function main() {
     const n = parseInt(
@@ -124,7 +210,7 @@ async function main() {
     );
 
     if (isNaN(n) || n < 4) {
-        console.log("Error: el tamaño del tablero debe ser un número mayor o igual a 4.");
+        console.log("Error: tamaño inválido.");
         rl.close();
         return;
     }
@@ -142,13 +228,15 @@ async function main() {
         await preguntar("Digite columna inicial: ")
     );
 
-    // Validar que la posición inicial esté dentro del tablero
     if (
-        isNaN(inicioX) || isNaN(inicioY) ||
-        inicioX < 0 || inicioX >= n ||
-        inicioY < 0 || inicioY >= n
+        isNaN(inicioX) ||
+        isNaN(inicioY) ||
+        inicioX < 0 ||
+        inicioX >= n ||
+        inicioY < 0 ||
+        inicioY >= n
     ) {
-        console.log("Error: posición inicial fuera del tablero.");
+        console.log("Error: inicio inválido.");
         rl.close();
         return;
     }
@@ -156,12 +244,6 @@ async function main() {
     const cantidadObstaculos = parseInt(
         await preguntar("Digite cantidad de obstáculos: ")
     );
-
-    if (isNaN(cantidadObstaculos) || cantidadObstaculos < 0) {
-        console.log("Error: la cantidad de obstáculos no es válida.");
-        rl.close();
-        return;
-    }
 
     let obstaculos = [];
 
@@ -174,31 +256,21 @@ async function main() {
             await preguntar(`Columna obstáculo ${i + 1}: `)
         );
 
-        // Validar que cada obstáculo esté dentro del tablero
         if (
-            isNaN(x) || isNaN(y) ||
-            x < 0 || x >= n ||
-            y < 0 || y >= n
+            isNaN(x) ||
+            isNaN(y) ||
+            x < 0 ||
+            x >= n ||
+            y < 0 ||
+            y >= n
         ) {
-            console.log("Error: obstáculo fuera del tablero.");
+            console.log("Error: obstáculo inválido.");
             rl.close();
             return;
         }
 
-        // Evitar obstáculo en la posición inicial
         if (x === inicioX && y === inicioY) {
-            console.log("Error: no puede haber un obstáculo en la posición inicial.");
-            rl.close();
-            return;
-        }
-
-        // Evitar obstáculos repetidos
-        let repetido = obstaculos.some(
-            obstaculo => obstaculo[0] === x && obstaculo[1] === y
-        );
-
-        if (repetido) {
-            console.log("Error: obstáculo repetido.");
+            console.log("Error: obstáculo en inicio.");
             rl.close();
             return;
         }
@@ -210,12 +282,8 @@ async function main() {
 
     tablero[inicioX][inicioY] = 0;
 
-    historial.push({
-        tipo: "inicio",
-        x: inicioX,
-        y: inicioY,
-        paso: 0
-    });
+    mejorTablero = copiarTablero(tablero);
+    mayorPasoAlcanzado = 1;
 
     let totalCasillas = contarCasillasLibres(tablero);
 
@@ -224,7 +292,7 @@ async function main() {
     console.log("Inicio:", "(" + inicioX + "," + inicioY + ")");
     console.log("Obstáculos:", obstaculos);
 
-    let inicioTiempo = performance.now();
+    let inicioTiempo = Date.now();
 
     let solucion = resolverCaballo(
         tablero,
@@ -234,29 +302,44 @@ async function main() {
         totalCasillas
     );
 
-    let finTiempo = performance.now();
+    let finTiempo = Date.now();
+
     estadisticas.tiempo = finTiempo - inicioTiempo;
 
     if (solucion) {
         console.log("\nSolución encontrada:");
         console.table(tablero);
     } else {
-        console.log("\nNo se encontró solución.");
-        console.table(tablero);
+        console.log("\nNo se encontró solución completa.");
+
+        console.log(
+            "Mayor cantidad de pasos alcanzados:",
+            mayorPasoAlcanzado,
+            "de",
+            totalCasillas
+        );
+
+        console.log("\nMejor recorrido alcanzado:");
+        console.table(mejorTablero);
     }
 
     console.log("\n=== ESTADÍSTICAS ===");
-    console.log("Movimientos intentados:", estadisticas.movimientosIntentados);
-    console.log("Retrocesos:", estadisticas.retrocesos);
-    console.log("Tiempo total:", estadisticas.tiempo.toFixed(2), "ms");
-    console.log("Cantidad de pasos guardados:", historial.length);
 
-    console.log("\nPrimeros 20 pasos del historial:");
-    console.table(historial.slice(0, 20));
+    console.log(
+        "Movimientos intentados:",
+        estadisticas.movimientosIntentados
+    );
 
-    // Mostrar cómo terminó el proceso
-    console.log("\nÚltimos 20 pasos del historial:");
-    console.table(historial.slice(-20));
+    console.log(
+        "Retrocesos:",
+        estadisticas.retrocesos
+    );
+
+    console.log(
+        "Tiempo total:",
+        estadisticas.tiempo,
+        "ms"
+    );
 
     rl.close();
 }

@@ -1,3 +1,17 @@
+/**
+ * ============================================
+ * ♞ Knight Tour/ Deilyn y Alexa
+ * ============================================
+ * Convenciones:
+ * -1 = casilla libre
+ * -2 = obstáculo
+ * >=0 = número de paso del caballo
+ */
+
+/**
+ * Movimientos posibles del caballo.
+ * @type {number[][]}
+ */
 const movimientos = [
     [-2, -1],
     [-2, +1],
@@ -9,16 +23,33 @@ const movimientos = [
     [+2, +1],
 ];
 
+/**
+ * Crea un tablero n x n inicializado en -1.
+ * @param {number} n
+ * @returns {number[][]}
+ */
 export function crearTablero(n) {
     return Array.from({ length: n }, () => Array(n).fill(-1));
 }
 
+/**
+ * Alterna una casilla entre libre (-1) y obstáculo (-2).
+ * @param {number[][]} tablero
+ * @param {number} x
+ * @param {number} y
+ * @returns {number[][]}
+ */
 export function toggleObstaculo(tablero, x, y) {
     const nuevo = tablero.map(fila => [...fila]);
     nuevo[x][y] = nuevo[x][y] === -2 ? -1 : -2;
     return nuevo;
 }
 
+/**
+ * Valida tamaño del tablero.
+ * @param {number|string} n
+ * @returns {{valido:boolean, mensaje:string}}
+ */
 export function validarTamanio(n) {
     const valor = Number(n);
     if (!Number.isInteger(valor) || valor < 4) {
@@ -27,18 +58,33 @@ export function validarTamanio(n) {
     return { valido: true, mensaje: "" };
 }
 
+/**
+ * Valida posición inicial.
+ * @param {number|string} x
+ * @param {number|string} y
+ * @param {number} n
+ * @returns {{valido:boolean, mensaje:string}}
+ */
 export function validarPosicionInicial(x, y, n) {
     const xNum = Number(x);
     const yNum = Number(y);
+
     if (!Number.isInteger(xNum) || !Number.isInteger(yNum)) {
         return { valido: false, mensaje: "La posición inicial debe ser un número entero." };
     }
+
     if (xNum < 0 || xNum >= n || yNum < 0 || yNum >= n) {
         return { valido: false, mensaje: "La posición inicial está fuera del tablero." };
     }
+
     return { valido: true, mensaje: "" };
 }
 
+/**
+ * Valida cantidad de obstáculos.
+ * @param {number|string} cantidadObstaculos
+ * @returns {{valido:boolean, mensaje:string}}
+ */
 export function validarCantidadObstaculos(cantidadObstaculos) {
     const cantidad = Number(cantidadObstaculos);
     if (!Number.isInteger(cantidad) || cantidad < 0) {
@@ -47,6 +93,16 @@ export function validarCantidadObstaculos(cantidadObstaculos) {
     return { valido: true, mensaje: "" };
 }
 
+/**
+ * Valida un obstáculo individual.
+ * @param {number|string} x
+ * @param {number|string} y
+ * @param {number} n
+ * @param {number} inicioX
+ * @param {number} inicioY
+ * @param {number[][]} obstaculos
+ * @returns {{valido:boolean, mensaje:string}}
+ */
 export function validarObstaculo(x, y, n, inicioX, inicioY, obstaculos) {
     const xNum = Number(x);
     const yNum = Number(y);
@@ -54,49 +110,66 @@ export function validarObstaculo(x, y, n, inicioX, inicioY, obstaculos) {
     if (!Number.isInteger(xNum) || !Number.isInteger(yNum)) {
         return { valido: false, mensaje: "Las coordenadas del obstáculo deben ser números enteros." };
     }
+
     if (xNum < 0 || xNum >= n || yNum < 0 || yNum >= n) {
         return { valido: false, mensaje: "Obstáculo fuera del tablero." };
     }
+
     if (xNum === inicioX && yNum === inicioY) {
         return { valido: false, mensaje: "No puede haber un obstáculo en la posición inicial." };
     }
-    const repetido = obstaculos.some(obstaculo => obstaculo[0] === xNum && obstaculo[1] === yNum);
+
+    const repetido = obstaculos.some(([ox, oy]) => ox === xNum && oy === yNum);
+
     if (repetido) {
         return { valido: false, mensaje: "Obstáculo repetido." };
     }
+
     return { valido: true, mensaje: "" };
 }
 
+/**
+ * Agrega obstáculos al tablero.
+ * @param {number[][]} tablero
+ * @param {number[][]} obstaculos
+ * @returns {number[][]}
+ */
 export function agregarObstaculos(tablero, obstaculos) {
     const copia = tablero.map(fila => [...fila]);
-    for (let obstaculo of obstaculos) {
-        let x = obstaculo[0];
-        let y = obstaculo[1];
+    for (let [x, y] of obstaculos) {
         copia[x][y] = -2;
     }
     return copia;
 }
 
+/**
+ * Verifica si está dentro del tablero.
+ * @private
+ */
 function dentroTablero(x, y, tablero) {
-    return (
-        x >= 0 &&
-        x < tablero.length &&
-        y >= 0 &&
-        y < tablero[0].length
-    );
+    return x >= 0 && x < tablero.length && y >= 0 && y < tablero[0].length;
 }
 
+/**
+ * Verifica si una casilla es válida.
+ * @private
+ */
 function esValido(x, y, tablero) {
-    return (
-        dentroTablero(x, y, tablero) &&
-        tablero[x][y] === -1
-    );
+    return dentroTablero(x, y, tablero) && tablero[x][y] === -1;
 }
 
+/**
+ * Copia profunda del tablero.
+ * @private
+ */
 function copiarTablero(tablero) {
     return tablero.map(fila => [...fila]);
 }
 
+/**
+ * Evita que el caballo "salte" usando obstáculos como puente.
+ * @private
+ */
 function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
     let dx = nx - x;
     let dy = ny - y;
@@ -104,34 +177,29 @@ function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
     let sx = Math.sign(dx);
     let sy = Math.sign(dy);
 
-    let casillasDelMovimiento = [];
+    let casillas = [];
 
     if (Math.abs(dx) === 2 && Math.abs(dy) === 1) {
-        casillasDelMovimiento = [
-            [x + sx, y],
-            [x + 2 * sx, y]
-        ];
+        casillas = [[x + sx, y], [x + 2 * sx, y]];
     }
 
     if (Math.abs(dx) === 1 && Math.abs(dy) === 2) {
-        casillasDelMovimiento = [
-            [x, y + sy],
-            [x, y + 2 * sy]
-        ];
+        casillas = [[x, y + sy], [x, y + 2 * sy]];
     }
 
-    for (let casilla of casillasDelMovimiento) {
-        let cx = casilla[0];
-        let cy = casilla[1];
-
-        if (dentroTablero(cx, cy, tablero) && tablero[cx][cy] === -2) {
-            return true;
-        }
-    }
-
-    return false;
+    return casillas.some(([cx, cy]) =>
+        dentroTablero(cx, cy, tablero) && tablero[cx][cy] === -2
+    );
 }
 
+/**
+ * Obtiene movimientos válidos del caballo.
+ * @param {number} x
+ * @param {number} y
+ * @param {number[][]} tablero
+ * @param {{movimientosIntentados:number}} [estadisticas]
+ * @returns {number[][]}
+ */
 export function movimientosValidos(x, y, tablero, estadisticas = null) {
     let validos = [];
 
@@ -139,17 +207,10 @@ export function movimientosValidos(x, y, tablero, estadisticas = null) {
         let nx = x + mov[0];
         let ny = y + mov[1];
 
-        if (estadisticas) {
-            estadisticas.movimientosIntentados++;
-        }
+        if (estadisticas) estadisticas.movimientosIntentados++;
 
-        if (!esValido(nx, ny, tablero)) {
-            continue;
-        }
-
-        if (usaObstaculoComoPuente(x, y, nx, ny, tablero)) {
-            continue;
-        }
+        if (!esValido(nx, ny, tablero)) continue;
+        if (usaObstaculoComoPuente(x, y, nx, ny, tablero)) continue;
 
         validos.push([nx, ny]);
     }
@@ -157,90 +218,75 @@ export function movimientosValidos(x, y, tablero, estadisticas = null) {
     return validos;
 }
 
+/**
+ * Cuenta casillas libres.
+ * @private
+ */
 function contarCasillasLibres(tablero) {
     let total = 0;
-
-    for (let x = 0; x < tablero.length; x++) {
-        for (let y = 0; y < tablero[0].length; y++) {
-            if (tablero[x][y] !== -2) {
-                total++;
-            }
+    for (let fila of tablero) {
+        for (let celda of fila) {
+            if (celda !== -2) total++;
         }
     }
-
     return total;
 }
 
+/**
+ * Verifica si existe solución.
+ * @param {number[][]} tablero
+ * @param {number} startX
+ * @param {number} startY
+ */
 export function verificarResoluble(tablero, startX, startY) {
-    const n = tablero.length;
-
-    if (startX < 0 || startX >= n || startY < 0 || startY >= n) {
-        return { posible: false, mensaje: "La posición inicial está fuera del tablero." };
-    }
-
-    if (tablero[startX][startY] === -2) {
-        return { posible: false, mensaje: "La casilla inicial es un obstáculo." };
-    }
-
     const resultado = iniciarRecorrido(tablero, startX, startY, false);
 
     return {
         posible: resultado.posible,
-        mensaje: resultado.posible
-            ? ""
-            : "No existe solución para este tablero con esta posición inicial."
+        mensaje: resultado.posible ? "" : "No existe solución para este tablero con esta posición inicial."
     };
 }
 
-function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas, estadisticas, historial, mejorRecorridoData) {
-    if (movimientoActual > mejorRecorridoData.mayorPasoAlcanzado) {
-        mejorRecorridoData.mayorPasoAlcanzado = movimientoActual;
-        mejorRecorridoData.mejorTablero = copiarTablero(tablero);
-        mejorRecorridoData.ultimaPosicion = { x, y };
+/**
+ * Backtracking del caballo.
+ * @private
+ */
+function resolverCaballo(tablero, x, y, paso, total, stats, historial, mejor) {
+    if (paso > mejor.mayorPasoAlcanzado) {
+        mejor.mayorPasoAlcanzado = paso;
+        mejor.mejorTablero = copiarTablero(tablero);
+        mejor.ultimaPosicion = { x, y };
     }
 
-    if (movimientoActual === totalCasillas) {
-        return true;
-    }
+    if (paso === total) return true;
 
-    let validos = movimientosValidos(x, y, tablero, estadisticas);
+    let validos = movimientosValidos(x, y, tablero, stats);
 
-    for (let i = 0; i < validos.length; i++) {
-        let nuevoX = validos[i][0];
-        let nuevoY = validos[i][1];
+    for (let [nx, ny] of validos) {
+        tablero[nx][ny] = paso;
 
-        tablero[nuevoX][nuevoY] = movimientoActual;
+        if (historial) historial.push({ tipo: "avance", x: nx, y: ny, paso });
 
-        if (historial) {
-            historial.push({
-                tipo: "avance",
-                x: nuevoX,
-                y: nuevoY,
-                paso: movimientoActual
-            });
-        }
-
-        if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, totalCasillas, estadisticas, historial, mejorRecorridoData)) {
+        if (resolverCaballo(tablero, nx, ny, paso + 1, total, stats, historial, mejor)) {
             return true;
         }
 
-        estadisticas.retrocesos++;
+        stats.retrocesos++;
+        if (historial) historial.push({ tipo: "retroceso", x: nx, y: ny, paso });
 
-        if (historial) {
-            historial.push({
-                tipo: "retroceso",
-                x: nuevoX,
-                y: nuevoY,
-                paso: movimientoActual
-            });
-        }
-
-        tablero[nuevoX][nuevoY] = -1;
+        tablero[nx][ny] = -1;
     }
 
     return false;
 }
 
+/**
+ * Inicia el recorrido del caballo.
+ * @param {number[][]} tablero
+ * @param {number} inicioX
+ * @param {number} inicioY
+ * @param {boolean} [guardarHistorial=true]
+ */
 export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = true) {
     const n = tablero.length;
     const validacion = validarPosicionInicial(inicioX, inicioY, n);
@@ -249,7 +295,7 @@ export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = t
         return {
             posible: false,
             mensaje: validacion.mensaje,
-            tablero: tablero.map(fila => [...fila]),
+            tablero: copiarTablero(tablero),
             estadisticas: { movimientosIntentados: 0, retrocesos: 0, tiempo: 0 },
             historial: [],
             mejorRecorrido: null,
@@ -257,8 +303,8 @@ export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = t
         };
     }
 
-    const copia = tablero.map(fila => [...fila]);
-    const estadisticas = { movimientosIntentados: 0, retrocesos: 0, tiempo: 0 };
+    const copia = copiarTablero(tablero);
+    const stats = { movimientosIntentados: 0, retrocesos: 0, tiempo: 0 };
     const historial = guardarHistorial ? [] : null;
 
     if (copia[inicioX][inicioY] === -2) {
@@ -266,44 +312,38 @@ export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = t
             posible: false,
             mensaje: "La casilla inicial es un obstáculo.",
             tablero: copia,
-            estadisticas,
+            estadisticas: stats,
             historial: [],
             mejorRecorrido: null,
             mayorPasoAlcanzado: 0
         };
     }
 
-    const totalCasillas = contarCasillasLibres(copia);
-
+    const total = contarCasillasLibres(copia);
     copia[inicioX][inicioY] = 0;
 
-    if (guardarHistorial) {
-        historial.push({ tipo: "inicio", x: inicioX, y: inicioY, paso: 0 });
-    }
+    if (historial) historial.push({ tipo: "inicio", x: inicioX, y: inicioY, paso: 0 });
 
-    const mejorRecorridoData = {
+    const mejor = {
         mejorTablero: copiarTablero(copia),
         mayorPasoAlcanzado: 1,
         ultimaPosicion: { x: inicioX, y: inicioY }
     };
 
-    const inicioTiempo = performance.now();
-    const posible = resolverCaballo(
-        copia, inicioX, inicioY, 1, totalCasillas,
-        estadisticas, historial, mejorRecorridoData
-    );
-    estadisticas.tiempo = performance.now() - inicioTiempo;
+    const t0 = performance.now();
+    const posible = resolverCaballo(copia, inicioX, inicioY, 1, total, stats, historial, mejor);
+    stats.tiempo = performance.now() - t0;
 
     return {
         posible,
         mensaje: posible
-            ? `Solución encontrada.`
-            : `No se encontró solución. Mejor recorrido: ${mejorRecorridoData.mayorPasoAlcanzado - 1} de ${totalCasillas - 1} pasos.`,
-        tablero: posible ? copia : mejorRecorridoData.mejorTablero,
-        estadisticas,
+            ? "Solución encontrada."
+            : `No se encontró solución. Mejor recorrido: ${mejor.mayorPasoAlcanzado - 1} de ${total - 1} pasos.`,
+        tablero: posible ? copia : mejor.mejorTablero,
+        estadisticas: stats,
         historial: historial ?? [],
-        mejorRecorrido: mejorRecorridoData.mejorTablero,
-        mayorPasoAlcanzado: mejorRecorridoData.mayorPasoAlcanzado - 1,
-        ultimaPosicion: mejorRecorridoData.ultimaPosicion
+        mejorRecorrido: mejor.mejorTablero,
+        mayorPasoAlcanzado: mejor.mayorPasoAlcanzado - 1,
+        ultimaPosicion: mejor.ultimaPosicion
     };
 }

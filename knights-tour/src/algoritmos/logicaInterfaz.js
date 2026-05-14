@@ -297,7 +297,7 @@ export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = t
     return {
         posible,
         mensaje: posible
-            ? `Solución encontrada. Se completaron ${totalCasillas - 1} movimientos.`
+            ? `Solución encontrada.`
             : `No se encontró solución. Mejor recorrido: ${mejorRecorridoData.mayorPasoAlcanzado - 1} de ${totalCasillas - 1} pasos.`,
         tablero: posible ? copia : mejorRecorridoData.mejorTablero,
         estadisticas,

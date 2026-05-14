@@ -136,13 +136,22 @@ function movimientosValidos(x, y, tablero) {
 // Función para contar cuántos movimientos válidos tendría el caballo desde (x, y)
 function contarMovimientosFuturos(x, y, tablero) {
 
-    let futuros = movimientosValidos(
-        x,
-        y,
-        tablero
-    );
+    let futuros = movimientosValidos(x,y,tablero);
 
     return futuros.length;
+}
+function ordenarPorWarnsdorff(validos, tablero) {
+
+    // Ordena los movimientos válidos según la cantidad de movimientos futuros que tendrían, de menor a mayor
+    validos.sort((a, b) => {
+
+        let futurosA = contarMovimientosFuturos(a[0],a[1],tablero);
+        let futurosB = contarMovimientosFuturos(b[0],b[1],tablero);
+
+        return futurosA - futurosB;
+    });
+
+    return validos;
 }
 
 function agregarObstaculos(tablero, obstaculos) {
@@ -179,18 +188,29 @@ function copiarTablero(tablero) {
 }
 
 function resolverCaballo(tablero,x,y,movimientoActual,totalCasillas) {
+
     if (movimientoActual > mayorPasoAlcanzado) {
+
         mayorPasoAlcanzado = movimientoActual;
         mejorTablero = copiarTablero(tablero);
     }
 
     if (movimientoActual === totalCasillas) {
+
         return true;
     }
 
-    let validos = movimientosValidos(x, y, tablero);
+    let validos = movimientosValidos(x,y,tablero);
+
+    if (usarWarnsdorff) {
+        validos = ordenarPorWarnsdorff(
+            validos,
+            tablero
+        );
+    }
 
     for (let i = 0; i < validos.length; i++) {
+
         let nuevoX = validos[i][0];
         let nuevoY = validos[i][1];
 
@@ -207,6 +227,7 @@ function resolverCaballo(tablero,x,y,movimientoActual,totalCasillas) {
 
     return false;
 }
+
 
 async function main() {
     const n = parseInt(

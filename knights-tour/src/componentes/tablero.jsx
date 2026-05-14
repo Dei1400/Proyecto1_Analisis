@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   crearTablero,
   toggleObstaculo,
@@ -8,12 +8,15 @@ import {
   validarPosicionInicial,
 } from "../algoritmos/logicaInterfaz";
 
-function getColor(valor, enRetroceso, esPosicionActual) {
-  if (esPosicionActual) return "#f39c12";     // naranja para posición actual del caballo
-  if (enRetroceso) return "#e74c3c";          // retroceso (rojo)
-  if (valor === -2) return "#555";            // obstáculo
-  if (valor === -1) return "#e9bcfe";         // sin visitar
-  return "#2ecc71";                           // avance válido (verde)
+import { contarCaminosDP } from "../algoritmos/conteoCaminosDP";
+
+function getColor(valor, enRetroceso, esPosicionActual, esDestino) {
+  if (esPosicionActual) return "#f39c12";
+  if (esDestino)        return "#74b9ff";
+  if (enRetroceso)      return "#e74c3c";
+  if (valor === -2)     return "#555";
+  if (valor === -1)     return "#e9bcfe";
+  return "#2ecc71";
 }
 
 export default function Board() {
@@ -24,83 +27,55 @@ export default function Board() {
   const [posicionInicial, setPosicionInicial] = useState({ x: 0, y: 0 });
   const [mensaje, setMensaje] = useState("");
   const [corriendo, setCorriendo] = useState(false);
-  
-  // Estado para parámetros previos (para reintentos)
   const [parametrosPrevios, setParametrosPrevios] = useState(null);
-  
-  // Estado para animación paso a paso
   const [animando, setAnimando] = useState(false);
-  const [velocidadAnimacion, setVelocidadAnimacion] = useState(150); // 150ms normal, 30ms rápida
+  const [velocidadAnimacion, setVelocidadAnimacion] = useState(150);
   const [indiceHistorial, setIndiceHistorial] = useState(0);
   const [historialCompleto, setHistorialCompleto] = useState([]);
   const [tableroAnimado, setTableroAnimado] = useState(() => crearTablero(5));
   const [celdasEnRetroceso, setCeldasEnRetroceso] = useState(new Set());
   const [posicionActualCaballo, setPosicionActualCaballo] = useState({ x: 0, y: 0 });
-  
-  // Estado para las estadísticas
   const [estadisticas, setEstadisticas] = useState({
     movimientosIntentados: 0,
     retrocesos: 0,
     tiempo: 0
   });
-
-  // Estado para la solución final
   const [solucionFinal, setSolucionFinal] = useState(null);
   const [mostrarSolucionFinal, setMostrarSolucionFinal] = useState(false);
 
-  // Función para activar modo obstáculo (desactiva modo selección inicial)
-  const activarModoObstaculo = () => {
-    setModoObstaculo(true);
-    if (modoSeleccionInicial) {
-      setModoSeleccionInicial(false);
-      setMensaje("Modo obstáculo activado - Modo selección inicial desactivado");
+  // Estados para conteo de caminos DP
+  const [modoConteo, setModoConteo]               = useState(false);
+  const [destinoConteo, setDestinoConteo]         = useState(null);
+  const [kMovimientos, setKMovimientos]           = useState(3);
+  const [resultadoConteo, setResultadoConteo]     = useState(null);
+  const [seleccionandoDestino, setSeleccionandoDestino] = useState(false);
+
+  // ─── Modos ────────────────────────────────────────────────────────
+  const toggleModoObstaculo = () => {
+    if (modoObstaculo) {
+      setModoObstaculo(false);
+      setMensaje("Modo obstáculo desactivado");
     } else {
+      setModoObstaculo(true);
+      setModoSeleccionInicial(false);
+      setSeleccionandoDestino(false);
       setMensaje("Modo obstáculo activado");
     }
   };
 
-  // Función para desactivar modo obstáculo
-  const desactivarModoObstaculo = () => {
-    setModoObstaculo(false);
-    setMensaje("Modo obstáculo desactivado");
-  };
-
-  // Función para activar modo selección inicial (desactiva modo obstáculo)
-  const activarModoSeleccionInicial = () => {
-    setModoSeleccionInicial(true);
-    if (modoObstaculo) {
-      setModoObstaculo(false);
-      setMensaje("Modo selección inicial activado - Modo obstáculo desactivado");
-    } else {
-      setMensaje("Modo selección inicial activado - Haz clic en una casilla para seleccionar la posición inicial");
-    }
-  };
-
-  // Función para desactivar modo selección inicial
-  const desactivarModoSeleccionInicial = () => {
-    setModoSeleccionInicial(false);
-    setMensaje("Modo selección inicial desactivado");
-  };
-
-  // Toggle modo obstáculo con validación
-  const toggleModoObstaculo = () => {
-    if (modoObstaculo) {
-      desactivarModoObstaculo();
-    } else {
-      activarModoObstaculo();
-    }
-  };
-
-  // Toggle modo selección inicial con validación
   const toggleModoSeleccionInicial = () => {
     if (modoSeleccionInicial) {
-      desactivarModoSeleccionInicial();
+      setModoSeleccionInicial(false);
+      setMensaje("Modo selección inicial desactivado");
     } else {
-      activarModoSeleccionInicial();
+      setModoSeleccionInicial(true);
+      setModoObstaculo(false);
+      setSeleccionandoDestino(false);
+      setMensaje("Selecciona una casilla para la posición inicial");
     }
   };
 
-  // Cambia el tamaño del tablero
+  // ─── Tamaño ───────────────────────────────────────────────────────
   function handleTamano(nuevoN) {
     const valor = Math.min(7, Math.max(4, Number(nuevoN)));
     setN(valor);
@@ -117,49 +92,57 @@ export default function Board() {
     setHistorialCompleto([]);
     setModoObstaculo(false);
     setModoSeleccionInicial(false);
+    setModoConteo(false);
+    setDestinoConteo(null);
+    setResultadoConteo(null);
+    setSeleccionandoDestino(false);
   }
 
+  // ─── Click en celda ───────────────────────────────────────────────
   function handleCeldaClick(x, y) {
     if (corriendo || animando) return;
-    
+
     if (modoObstaculo) {
+      if (x === posicionInicial.x && y === posicionInicial.y) {
+        setMensaje("✗ No puedes poner un obstáculo en la posición inicial del caballo.");
+        return;
+      }
       const nuevo = toggleObstaculo(tablero, x, y);
       setTablero(nuevo);
       setMostrarSolucionFinal(false);
       setSolucionFinal(null);
-      setMensaje(`Obstáculo ${tablero[x][y] === -2 ? 'eliminado' : 'agregado'} en (${x}, ${y})`);
+      setMensaje(`Obstáculo ${tablero[x][y] === -2 ? "eliminado" : "agregado"} en (${x}, ${y})`);
     } else if (modoSeleccionInicial) {
       if (tablero[x][y] === -2) {
-        setMensaje("No puedes colocar el caballo en un obstáculo.");
+        setMensaje("✗ No puedes colocar el caballo en un obstáculo.");
         return;
       }
       setPosicionInicial({ x, y });
       setPosicionActualCaballo({ x, y });
       setModoSeleccionInicial(false);
-      setMensaje(`✓ Casilla inicial seleccionada: (${x}, ${y})`);
+      setMensaje(`✓ Casilla inicial A seleccionada: (${x}, ${y})`);
       setMostrarSolucionFinal(false);
       setSolucionFinal(null);
+    } else if (seleccionandoDestino) {
+      if (tablero[x][y] === -2) {
+        setMensaje("✗ El destino no puede ser un obstáculo.");
+        return;
+      }
+      setDestinoConteo({ x, y });
+      setSeleccionandoDestino(false);
+      setMensaje(`✓ Casilla destino B seleccionada: (${x}, ${y})`);
     }
   }
 
-  // Verifica si el tablero es resoluble antes de correr el algoritmo
-  function handleVerificar() {
-    const { posible, mensaje: msg } = verificarResoluble(
-      tablero, posicionInicial.x, posicionInicial.y, movimientosValidos
-    );
-    setMensaje(posible ? "El tablero es resoluble." : `✗ ${msg}`);
-  }
-
-  // Mostrar animación normal
+  // ─── Animación ────────────────────────────────────────────────────
   function handleMostrarAnimacionNormal() {
     if (!historialCompleto || historialCompleto.length === 0) {
       setMensaje("No hay una solución guardada. Primero ejecuta 'Resolver Tour'.");
       return;
     }
-    
     setMostrarSolucionFinal(false);
     setAnimando(true);
-    setVelocidadAnimacion(150); // Velocidad normal: 150ms
+    setVelocidadAnimacion(150);
     setIndiceHistorial(0);
     setTableroAnimado(parametrosPrevios?.tablero.map(fila => [...fila]) || crearTablero(n));
     setCeldasEnRetroceso(new Set());
@@ -167,16 +150,14 @@ export default function Board() {
     setMensaje("Animando recorrido (velocidad normal)...");
   }
 
-  // Mostrar animación rápida
   function handleMostrarAnimacionRapida() {
     if (!historialCompleto || historialCompleto.length === 0) {
       setMensaje("No hay una solución guardada. Primero ejecuta 'Resolver Tour'.");
       return;
     }
-    
     setMostrarSolucionFinal(false);
     setAnimando(true);
-    setVelocidadAnimacion(30); // Velocidad rápida: 30ms
+    setVelocidadAnimacion(30);
     setIndiceHistorial(0);
     setTableroAnimado(parametrosPrevios?.tablero.map(fila => [...fila]) || crearTablero(n));
     setCeldasEnRetroceso(new Set());
@@ -184,7 +165,6 @@ export default function Board() {
     setMensaje("Animando recorrido (velocidad rápida)...");
   }
 
-  // Effect para animar el historial paso a paso
   useEffect(() => {
     if (!animando || historialCompleto.length === 0) return;
 
@@ -194,7 +174,6 @@ export default function Board() {
         const nuevoTablero = tableroAnimado.map(fila => [...fila]);
         const nuevasRetrocesos = new Set(celdasEnRetroceso);
 
-        // Aplicar cambio según tipo de movimiento
         if (paso.tipo === "inicio") {
           nuevoTablero[paso.x][paso.y] = paso.paso;
           nuevasRetrocesos.delete(`${paso.x},${paso.y}`);
@@ -207,8 +186,6 @@ export default function Board() {
           nuevoTablero[paso.x][paso.y] = -1;
           nuevasRetrocesos.add(`${paso.x},${paso.y}`);
           setPosicionActualCaballo({ x: paso.x, y: paso.y });
-          
-          // Para animación rápida, reducir el tiempo de visualización del retroceso
           const tiempoRetroceso = velocidadAnimacion === 150 ? 600 : 120;
           setTimeout(() => {
             setCeldasEnRetroceso(prev => {
@@ -223,26 +200,24 @@ export default function Board() {
         setCeldasEnRetroceso(nuevasRetrocesos);
         setIndiceHistorial(indiceHistorial + 1);
       } else {
-        // Animación terminada
         setAnimando(false);
         setCeldasEnRetroceso(new Set());
-        
         const ultimoPaso = historialCompleto[historialCompleto.length - 1];
-        const tieneSolucion = ultimoPaso?.tipo === "avance" && 
-                             historialCompleto.filter(p => p.tipo === "avance").length === contarCasillasLibres(tablero);
-        
-        if (tieneSolucion) {
-          setMensaje("Animación completada - Solución encontrada");
-        } else {
-          setMensaje("Animación completada - Sin solución (última posición del caballo mostrada)");
-        }
+        const tieneSolucion =
+          ultimoPaso?.tipo === "avance" &&
+          historialCompleto.filter(p => p.tipo === "avance").length === contarCasillasLibres(tablero);
+        setMensaje(
+          tieneSolucion
+            ? "✓ Animación completada - Solución encontrada"
+            : "Animación completada - Sin solución completa"
+        );
       }
     }, velocidadAnimacion);
 
     return () => clearTimeout(delay);
   }, [animando, indiceHistorial, historialCompleto, tableroAnimado, celdasEnRetroceso, tablero, velocidadAnimacion]);
 
-  // Ejecuta el algoritmo
+  // ─── Resolver ─────────────────────────────────────────────────────
   function handleResolver() {
     if (corriendo) return;
 
@@ -265,44 +240,58 @@ export default function Board() {
     setHistorialCompleto(resultado.historial);
     setTablero(resultado.tablero);
     setEstadisticas(resultado.estadisticas);
-    
-    // Guardar solución final
     setSolucionFinal({
       tablero: resultado.tablero,
       posicionFinal: obtenerUltimaPosicion(resultado.historial)
     });
-    
     setMostrarSolucionFinal(true);
     setPosicionActualCaballo(obtenerUltimaPosicion(resultado.historial));
-    
     setCorriendo(false);
-    
-    setMensaje(resultado.posible 
-      ? "Solución encontrada. Usa los botones de animación para ver el recorrido." 
-      : "No se encontró solución. Usa los botones de animación para ver el intento.");
+    setMensaje(
+      resultado.posible
+        ? "✓ Solución encontrada. Usa los botones de animación para ver el recorrido."
+        : "✗ No se encontró solución. Usa los botones de animación para ver el intento."
+    );
   }
 
-  // Función auxiliar para contar casillas libres
-  function contarCasillasLibres(tablero) {
-    let total = 0;
-    for (let x = 0; x < tablero.length; x++) {
-      for (let y = 0; y < tablero[0].length; y++) {
-        if (tablero[x][y] !== -2) {
-          total++;
-        }
-      }
+  // ─── Conteo DP ────────────────────────────────────────────────────
+  function handleContarCaminos() {
+    if (!destinoConteo) {
+      setMensaje("✗ Selecciona una casilla destino B primero.");
+      return;
     }
+    if (kMovimientos < 1) {
+      setMensaje("✗ K debe ser mayor a 0.");
+      return;
+    }
+    const resultado = contarCaminosDP(
+      tablero,
+      posicionInicial.x, posicionInicial.y,
+      destinoConteo.x,   destinoConteo.y,
+      kMovimientos
+    );
+    setResultadoConteo(resultado);
+    setMensaje(
+      `Caminos de A(${posicionInicial.x},${posicionInicial.y}) → B(${destinoConteo.x},${destinoConteo.y}) en ${kMovimientos} movimientos: ${resultado}`
+    );
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────
+  function contarCasillasLibres(t) {
+    let total = 0;
+    for (let x = 0; x < t.length; x++)
+      for (let y = 0; y < t[0].length; y++)
+        if (t[x][y] !== -2) total++;
     return total;
   }
 
-  // Obtener última posición del caballo del historial
   function obtenerUltimaPosicion(historial) {
     if (!historial || historial.length === 0) return posicionInicial;
-    const ultimoMovimiento = historial[historial.length - 1];
-    return { x: ultimoMovimiento.x, y: ultimoMovimiento.y };
+    const ultimo = historial[historial.length - 1];
+    return { x: ultimo.x, y: ultimo.y };
   }
 
-  // Reinicia el tablero
+  // ─── Reset ────────────────────────────────────────────────────────
   function handleReset() {
     setTablero(crearTablero(n));
     setTableroAnimado(crearTablero(n));
@@ -318,22 +307,20 @@ export default function Board() {
     setParametrosPrevios(null);
     setIndiceHistorial(0);
     setHistorialCompleto([]);
-    setEstadisticas({
-      movimientosIntentados: 0,
-      retrocesos: 0,
-      tiempo: 0
-    });
+    setEstadisticas({ movimientosIntentados: 0, retrocesos: 0, tiempo: 0 });
+    setModoConteo(false);
+    setDestinoConteo(null);
+    setKMovimientos(3);
+    setResultadoConteo(null);
+    setSeleccionandoDestino(false);
   }
 
-  // Paleta de colores pastel
+  // ─── Colores ──────────────────────────────────────────────────────
   const pastelColors = {
     background: "#f8f4f9",
-    header: "#b8a9c9",
     headerText: "#6e4da2",
     buttonPrimary: "#ffd4e8",
-    buttonPrimaryHover: "#ffb3d9",
     buttonSecondary: "#c9e4f7",
-    buttonSecondaryHover: "#b3d9f0",
     buttonDanger: "#ffccd5",
     border: "#e0d5e8",
     tableHeader: "#d4c4e2",
@@ -343,387 +330,307 @@ export default function Board() {
     inputBorder: "#d4c4e2",
   };
 
-  // Determinar qué tablero mostrar
-  const tableroAMostrar = animando ? tableroAnimado : (mostrarSolucionFinal && solucionFinal ? solucionFinal.tablero : tablero);
+  const tableroAMostrar = animando
+    ? tableroAnimado
+    : (mostrarSolucionFinal && solucionFinal ? solucionFinal.tablero : tablero);
 
+  // ─── Render ───────────────────────────────────────────────────────
   return (
-      <div style={{ 
-        display: "flex",
-        gap: 16,
-        padding: 16, 
-        fontFamily: "sans-serif",
-        background: pastelColors.background,
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        boxSizing: "border-box",
-        margin: 0,
-      }}>
-      {/* Panel izquierdo - Controles y estadísticas */}
-    <div style={{ 
-      flex: 1,
-      minWidth: 240,
-      display: "flex",
-      flexDirection: "column",
-      gap: 8,
-      overflowY: "auto",
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: "100vw", height: "100vh",
+      background: pastelColors.background,
+      boxSizing: "border-box", overflow: "hidden",
     }}>
-        <h2 style={{ 
-          color: pastelColors.headerText,
-          fontSize: 20,
-          textAlign: "center",
-          fontWeight: "600",
-          margin: 0
-        }}>
-          ♞ Knight's Tour ♞
-        </h2>
+      <div style={{
+        display: "flex", gap: 16, padding: 16,
+        fontFamily: "sans-serif", background: pastelColors.background,
+        borderRadius: 15, width: "100%", height: "100%",
+        boxSizing: "border-box", alignItems: "center", justifyContent: "center",
+      }}>
 
-        {/* Control de tamaño */}
-        <div style={{ 
-          display: "flex", 
-          gap: 10, 
-          alignItems: "center",
-          background: "#ffffff",
-          padding: "12px 16px",
-          borderRadius: 10,
-          border: `1px solid ${pastelColors.border}`
-        }}>
-          <label style={{ 
-            color: pastelColors.text,
-            fontWeight: "500"
-          }}>
-            Tamaño del tablero:
-          </label>
-          <input
-            type="number" 
-            min={4} 
-            max={7} 
-            value={n}
-            onChange={e => handleTamano(e.target.value)}
-            style={{ 
-              width: 50,
-              padding: "6px 8px",
-              border: `2px solid ${pastelColors.inputBorder}`,
-              borderRadius: 6,
-              fontSize: 14,
-              textAlign: "center",
-              background: "#faf8fc",
-              color: "#000000",  
-              fontWeight: "600"
-            }}
-          />
-          <span style={{ fontSize: 12, color: "#9b8eae" }}>(4-7)</span>
-        </div>
-
-        {/* Información de casilla inicial */}
-        <div style={{ 
-          display: "flex", 
-          gap: 10, 
-          alignItems: "center",
-          background: "#ffffff",
-          padding: "8px 16px",
-          borderRadius: 8,
-          border: `1px solid ${pastelColors.border}`
-        }}>
-          <span style={{ 
-            color: pastelColors.text,
-            fontWeight: "500"
-          }}>
-            ♞ Casilla inicial: ({posicionInicial.x}, {posicionInicial.y})
-          </span>
-        </div>
-
-        {/* Información de posición actual */}
-        <div style={{ 
-          display: "flex", 
-          gap: 10, 
-          alignItems: "center",
-          background: "#ffffff",
-          padding: "8px 16px",
-          borderRadius: 8,
-          border: `1px solid ${pastelColors.border}`
-        }}>
-          <span style={{ 
-            color: pastelColors.text,
-            fontWeight: "500"
-          }}>
-           ♞ Posición actual: ({posicionActualCaballo.x}, {posicionActualCaballo.y})
-          </span>
-        </div>
-
-        {/* Controles */}
-        <div style={{ 
-          display: "flex", 
-          flexDirection: "column",
-          gap: 10
-        }}>
-          <button
-            onClick={toggleModoObstaculo}
-            disabled={corriendo || animando}
-            style={{ 
-              background: modoObstaculo ? "#ffb3c6" : pastelColors.buttonPrimary,
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: corriendo || animando ? "not-allowed" : "pointer",
-              fontWeight: "500",
-              color: pastelColors.headerText,
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(200, 180, 210, 0.3)",
-              opacity: corriendo || animando ? 0.5 : 1
-            }}
-          >
-            {modoObstaculo ? "Modo obstáculo: ON" : "Modo obstáculo: OFF"}
-          </button>
-          
-          <button
-            onClick={toggleModoSeleccionInicial}
-            disabled={corriendo || animando}
-            style={{ 
-              background: modoSeleccionInicial ? "#ec7cc0" : "#c594c7",
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: corriendo || animando ? "not-allowed" : "pointer",
-              fontWeight: "500",
-              color: "#000",
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(255, 235, 59, 0.3)",
-              opacity: corriendo || animando ? 0.5 : 1
-            }}
-          >
-            {modoSeleccionInicial ? "♞ Seleccionar inicio: ON" : "♘ Seleccionar inicio: OFF"}
-          </button>
-          
-          <button 
-            onClick={handleVerificar} 
-            style={{ 
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: "pointer",
-              background: pastelColors.buttonSecondary,
-              color: pastelColors.headerText,
-              fontWeight: "500",
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(180, 200, 220, 0.3)"
-            }}
-            onMouseEnter={(e) => e.target.style.background = pastelColors.buttonSecondaryHover}
-            onMouseLeave={(e) => e.target.style.background = pastelColors.buttonSecondary}
-          >
-            Verificar tablero
-          </button>
-          
-          <button 
-            onClick={handleResolver} 
-            disabled={corriendo}
-            style={{ 
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: corriendo ? "not-allowed" : "pointer",
-              background: "#a8d5ff",
-              color: "#000",
-              fontWeight: "500",
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(140, 170, 210, 0.3)",
-              opacity: corriendo ? 0.6 : 1
-            }}
-          >
-            {corriendo ? "Resolviendo..." : "Resolver Tour"}
-          </button>
-          
-          <div style={{ display: "flex", gap: 10 }}>
-            <button 
-              onClick={handleMostrarAnimacionNormal}
-              disabled={animando || !historialCompleto || historialCompleto.length === 0}
-              style={{ 
-                flex: 1,
-                padding: "10px 18px", 
-                borderRadius: 8, 
-                border: "none", 
-                cursor: (animando || !historialCompleto || historialCompleto.length === 0) ? "not-allowed" : "pointer",
-                background: "#ffd966",
-                color: "#000",
-                fontWeight: "500",
-                transition: "all 0.3s",
-                boxShadow: "0 2px 4px rgba(255, 200, 100, 0.3)",
-                opacity: (animando || !historialCompleto || historialCompleto.length === 0) ? 0.6 : 1
-              }}
-            > 
-              {animando && velocidadAnimacion === 150 ? "Animando..." : "Normal"}
-            </button>
-            
-            <button 
-              onClick={handleMostrarAnimacionRapida}
-              disabled={animando || !historialCompleto || historialCompleto.length === 0}
-              style={{ 
-                flex: 1,
-                padding: "10px 18px", 
-                borderRadius: 8, 
-                border: "none", 
-                cursor: (animando || !historialCompleto || historialCompleto.length === 0) ? "not-allowed" : "pointer",
-                background: "#98d8ca",
-                color: "#000",
-                fontWeight: "500",
-                transition: "all 0.3s",
-                boxShadow: "0 2px 4px rgba(100, 200, 180, 0.3)",
-                opacity: (animando || !historialCompleto || historialCompleto.length === 0) ? 0.6 : 1
-              }}
-            > 
-              {animando && velocidadAnimacion === 30 ? " Animando..." : "Rápida"}
-            </button>
-          </div>
-          
-          <button 
-            onClick={handleReset} 
-            style={{ 
-              padding: "10px 18px", 
-              borderRadius: 8, 
-              border: "none", 
-              cursor: "pointer",
-              background: pastelColors.buttonDanger,
-              color: pastelColors.headerText,
-              fontWeight: "500",
-              transition: "all 0.3s",
-              boxShadow: "0 2px 4px rgba(220, 190, 200, 0.3)"
-            }}
-            onMouseEnter={(e) => e.target.style.background = "#ffb3c1"}
-            onMouseLeave={(e) => e.target.style.background = pastelColors.buttonDanger}
-          >
-            Reiniciar
-          </button>
-        </div>
-
-        {/* Estadísticas */}
+        {/* ── Panel izquierdo ── */}
         <div style={{
-          border: `1px solid ${pastelColors.border}`,
-          borderRadius: 12,
-          overflow: "hidden",
-          fontFamily: "sans-serif",
-          fontSize: 14,
-          boxShadow: "0 4px 12px rgba(180, 160, 210, 0.15)"
+          width: 250, flexShrink: 0, display: "flex", flexDirection: "column",
+          gap: 8, overflowY: "auto", maxHeight: "100%", paddingRight: 4,
         }}>
-          <div style={{
-            background: pastelColors.tableHeader,
-            color: pastelColors.headerText,
-            padding: "12px 20px",
-            fontWeight: "600",
-            fontSize: 16,
-            letterSpacing: 1,
+          <h2 style={{
+            color: pastelColors.headerText, fontSize: 20,
+            textAlign: "center", fontWeight: "600", margin: 0,
           }}>
-           Estadísticas
+            ♞ Knight's Tour ♞
+          </h2>
+
+          {/* Tamaño */}
+          <div style={{
+            display: "flex", gap: 8, alignItems: "center",
+            background: "#fff", padding: "6px 12px",
+            borderRadius: 8, border: `1px solid ${pastelColors.border}`,
+          }}>
+            <label style={{ color: pastelColors.text, fontWeight: "500", fontSize: 13 }}>Tamaño:</label>
+            <input
+              type="number" min={4} max={7} value={n}
+              onChange={e => handleTamano(e.target.value)}
+              style={{
+                width: 46, padding: "4px 6px",
+                border: `2px solid ${pastelColors.inputBorder}`,
+                borderRadius: 6, fontSize: 13, textAlign: "center",
+                background: "#faf8fc", color: "#000", fontWeight: "600",
+              }}
+            />
+            <span style={{ fontSize: 11, color: "#9b8eae" }}>(4-7)</span>
           </div>
 
+          {/* Info posiciones */}
           {[
-            { label: "Movimientos intentados", valor: estadisticas?.movimientosIntentados ?? "—" },
-            { label: "Retrocesos", valor: estadisticas?.retrocesos ?? "—" },
-            { label: "Tiempo de ejecución", valor: estadisticas?.tiempo ? `${estadisticas.tiempo.toFixed(2)} ms` : "—" },
-          ].map(({ label, valor }, i) => (
+            `♞ Inicio A: (${posicionInicial.x}, ${posicionInicial.y})`,
+            `♞ Actual: (${posicionActualCaballo.x}, ${posicionActualCaballo.y})`,
+          ].map((txt, i) => (
             <div key={i} style={{
-              display: "flex",
-              justifyContent: "space-between",
-              padding: "12px 20px",
-              background: i % 2 === 0 ? pastelColors.tableRow1 : pastelColors.tableRow2,
-              borderTop: `1px solid ${pastelColors.border}`,
-              transition: "background 0.3s"
+              background: "#fff", padding: "5px 12px",
+              borderRadius: 8, border: `1px solid ${pastelColors.border}`,
+              color: pastelColors.text, fontWeight: "500", fontSize: 13,
             }}>
-              <span style={{ color: pastelColors.text }}>{label}</span>
-              <span style={{ 
-                fontWeight: "bold", 
-                color: "#7b6b8e",
-                background: "#ffffff80",
-                padding: "2px 8px",
-                borderRadius: 4
-              }}>{valor}</span>
+              {txt}
             </div>
           ))}
-        </div>
-      </div>
 
-      {/* Panel derecho - Tablero y mensajes */}
-      <div style={{ 
-        flex: 2,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 16,
-        overflow: "hidden",
-      }}>
-        {/* Mensaje de estado */}
-        {mensaje && (
-          <div style={{ 
-            padding: "12px 20px",
-            background: "#ffffff",
-            borderRadius: 8,
-            border: `1px solid ${pastelColors.border}`,
-            color: pastelColors.text,
-            width: "100%",
-            textAlign: "center",
-            fontWeight: "500"
-          }}>
-            {mensaje}
-          </div>
-        )}
+          {/* Botones principales */}
+          {[
+            {
+              label: modoObstaculo ? "Obstáculo: ON" : "Obstáculo: OFF",
+              onClick: toggleModoObstaculo,
+              disabled: corriendo || animando,
+              bg: modoObstaculo ? "#ffb3c6" : pastelColors.buttonPrimary,
+              color: pastelColors.headerText,
+            },
+            {
+              label: modoSeleccionInicial ? "♞ Selec. inicio: ON" : "♘ Selec. inicio: OFF",
+              onClick: toggleModoSeleccionInicial,
+              disabled: corriendo || animando,
+              bg: modoSeleccionInicial ? "#ec7cc0" : "#c594c7",
+              color: "#000",
+            },
+            {
+              label: corriendo ? "Resolviendo..." : "Resolver Tour",
+              onClick: handleResolver,
+              disabled: corriendo || animando,
+              bg: "#a8d5ff",
+              color: "#000",
+            },
+          ].map(({ label, onClick, disabled, bg, color }, i) => (
+            <button key={i} onClick={onClick} disabled={disabled} style={{
+              background: bg, padding: "7px 14px", borderRadius: 8,
+              border: "none", cursor: disabled ? "not-allowed" : "pointer",
+              fontWeight: "500", fontSize: 13, color,
+              opacity: disabled ? 0.5 : 1, transition: "all 0.2s",
+            }}>
+              {label}
+            </button>
+          ))}
 
-        {/* Tablero */}
-        <div style={{ 
-          display: "inline-grid", 
-          gridTemplateColumns: `repeat(${n}, 80px)`, 
-          gap: 2,
-          background: "white",
-          padding: 12,
-          borderRadius: 10,
-          boxShadow: `0 4px 12px rgba(180, 160, 210, 0.2)`
-        }}>
-          {tableroAMostrar.map((fila, x) =>
-            fila.map((valor, y) => {
-              const esPosicionActual = !animando && (x === posicionActualCaballo.x && y === posicionActualCaballo.y);
-              const esInicial = x === posicionInicial.x && y === posicionInicial.y;
-              const enRetroceso = celdasEnRetroceso.has(`${x},${y}`);
-              
+          {/* Animación */}
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { label: animando && velocidadAnimacion === 150 ? "Animando..." : "▶ Normal", onClick: handleMostrarAnimacionNormal, bg: "#ffd966" },
+              { label: animando && velocidadAnimacion === 30  ? "Animando..." : "⚡ Rápida", onClick: handleMostrarAnimacionRapida, bg: "#98d8ca" },
+            ].map(({ label, onClick, bg }, i) => {
+              const dis = animando || !historialCompleto || historialCompleto.length === 0;
               return (
-                <div
-                  key={`${x}-${y}`}
-                  onClick={() => handleCeldaClick(x, y)}
-                  style={{
-                    width: 80, height: 80,
-                    background: getColor(valor, enRetroceso, esPosicionActual),
-                    border: "1px solid #ddd",
-                    borderRadius: 4,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: esPosicionActual ? 36 : (esInicial && !animando ? 24 : (valor >= 0 ? 16 : 12)),
-                    color: esPosicionActual ? "#fff" : (valor >= 0 ? "#3b1a6e" : "inherit"),
-                    fontWeight: "bold",
-                    cursor: (modoObstaculo || modoSeleccionInicial) && !corriendo && !animando ? "pointer" : "default",
-                    userSelect: "none",
-                    transition: "transform 0.2s, background 0.1s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if ((modoObstaculo || modoSeleccionInicial) && !corriendo && !animando) {
-                      e.target.style.transform = "scale(1.05)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = "scale(1)";
-                  }}
-                >
-                  {esPosicionActual ? "♞" : (valor === -2 ? "🚫" : (valor >= 0 ? valor : ""))}
-                </div>
+                <button key={i} onClick={onClick} disabled={dis} style={{
+                  flex: 1, padding: "7px 8px", borderRadius: 8, border: "none",
+                  cursor: dis ? "not-allowed" : "pointer",
+                  background: bg, color: "#000", fontWeight: "500", fontSize: 13,
+                  opacity: dis ? 0.6 : 1,
+                }}>
+                  {label}
+                </button>
               );
-            })
+            })}
+          </div>
+
+          {/* Reset */}
+          <button onClick={handleReset} style={{
+            padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+            background: pastelColors.buttonDanger, color: pastelColors.headerText,
+            fontWeight: "500", fontSize: 13,
+          }}>
+            🔄 Reiniciar
+          </button>
+
+          {/* Estadísticas */}
+          <div style={{ border: `1px solid ${pastelColors.border}`, borderRadius: 10, overflow: "hidden", fontSize: 13 }}>
+            <div style={{
+              background: pastelColors.tableHeader, color: pastelColors.headerText,
+              padding: "7px 14px", fontWeight: "600", fontSize: 13,
+            }}>
+              📊 Estadísticas
+            </div>
+            {[
+              { label: "Mov. intentados", valor: estadisticas?.movimientosIntentados ?? "—" },
+              { label: "Retrocesos",      valor: estadisticas?.retrocesos ?? "—" },
+              { label: "Tiempo",          valor: estadisticas?.tiempo ? `${Number(estadisticas.tiempo).toFixed(2)} ms` : "—" },
+            ].map(({ label, valor }, i) => (
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between",
+                padding: "7px 14px",
+                background: i % 2 === 0 ? pastelColors.tableRow1 : pastelColors.tableRow2,
+                borderTop: `1px solid ${pastelColors.border}`,
+              }}>
+                <span style={{ color: pastelColors.text }}>{label}</span>
+                <span style={{
+                  fontWeight: "bold", color: "#4a2580",
+                  background: "#ffffff80", padding: "1px 6px", borderRadius: 4,
+                }}>{valor}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Conteo DP */}
+          <button
+            onClick={() => { setModoConteo(m => !m); setResultadoConteo(null); }}
+            disabled={corriendo || animando}
+            style={{
+              padding: "7px 14px", borderRadius: 8, border: "none",
+              cursor: corriendo || animando ? "not-allowed" : "pointer",
+              background: modoConteo ? "#a29bfe" : "#dfe6e9",
+              color: "#000", fontWeight: "500", fontSize: 13,
+              opacity: corriendo || animando ? 0.5 : 1,
+            }}
+          >
+            {modoConteo ? "🔢 Conteo DP: ON" : "🔢 Conteo DP: OFF"}
+          </button>
+
+          {modoConteo && (
+            <div style={{
+              background: "#fff", borderRadius: 8,
+              border: `1px solid ${pastelColors.border}`,
+              padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              <span style={{ fontSize: 12, color: pastelColors.text }}>
+                A = ({posicionInicial.x},{posicionInicial.y})
+              </span>
+              <span style={{ fontSize: 12, color: pastelColors.text }}>
+                B = {destinoConteo ? `(${destinoConteo.x},${destinoConteo.y})` : "sin seleccionar"}
+              </span>
+              <button
+                onClick={() => setSeleccionandoDestino(s => !s)}
+                style={{
+                  padding: "5px 10px", borderRadius: 6, border: "none", cursor: "pointer",
+                  background: seleccionandoDestino ? "#fd79a8" : "#dfe6e9",
+                  fontSize: 12, fontWeight: "500",
+                }}
+              >
+                {seleccionandoDestino ? "Clic en tablero para B..." : "Seleccionar destino B"}
+              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label style={{ fontSize: 12, color: pastelColors.text }}>K movimientos:</label>
+                <input
+                  type="number" min={1} max={30} value={kMovimientos}
+                  onChange={e => setKMovimientos(Number(e.target.value))}
+                  style={{
+                    width: 46, padding: "3px 6px",
+                    border: `1px solid ${pastelColors.inputBorder}`,
+                    borderRadius: 6, fontSize: 12, textAlign: "center",
+                  }}
+                />
+              </div>
+              <button
+                onClick={handleContarCaminos}
+                style={{
+                  padding: "5px 10px", borderRadius: 6, border: "none", cursor: "pointer",
+                  background: "#55efc4", fontSize: 12, fontWeight: "600",
+                }}
+              >
+                Calcular caminos
+              </button>
+              {resultadoConteo !== null && (
+                <div style={{
+                  background: "#f0fff4", borderRadius: 6, padding: "6px 10px",
+                  fontSize: 13, fontWeight: "bold", color: "#2d6a4f", textAlign: "center",
+                }}>
+                  Caminos encontrados: {resultadoConteo}
+                </div>
+              )}
+            </div>
           )}
         </div>
-        
-        <div style={{ 
-          fontSize: 12, 
-          color: pastelColors.text,
-          textAlign: "center",
-          marginTop: 8
+
+        {/* ── Panel derecho — tablero ── */}
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          gap: 12, overflow: "auto", maxHeight: "100%", padding: 8,
         }}>
-          🟢 Verde = Visitado | 🔴 Rojo = Retroceso | 🟠 Naranja = Posición actual | 🚫 = Obstáculo
+          {/* Mensaje */}
+          <div style={{
+            minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center",
+            width: "100%", maxWidth: 600, boxSizing: "border-box",
+          }}>
+            {mensaje && (
+              <div style={{
+                padding: "8px 16px", background: "#fff",
+                borderRadius: 8, border: `1px solid ${pastelColors.border}`,
+                color: pastelColors.text, textAlign: "center",
+                fontWeight: "500", fontSize: 13, width: "100%",
+              }}>
+                {mensaje}
+              </div>
+            )}
+          </div>
+
+          {/* Tablero */}
+          <div style={{
+            display: "inline-grid",
+            gridTemplateColumns: `repeat(${n}, 80px)`,
+            gap: 2, background: "white", padding: 12,
+            borderRadius: 10, boxShadow: "0 4px 12px rgba(180,160,210,0.2)",
+            flexShrink: 0,
+          }}>
+            {tableroAMostrar.map((fila, x) =>
+              fila.map((valor, y) => {
+                const esPosicionActual = !animando && x === posicionActualCaballo.x && y === posicionActualCaballo.y;
+                const esDestino = modoConteo && destinoConteo && x === destinoConteo.x && y === destinoConteo.y;
+                const enRetroceso = celdasEnRetroceso.has(`${x},${y}`);
+
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    onClick={() => handleCeldaClick(x, y)}
+                    style={{
+                      width: 80, height: 80,
+                      background: getColor(valor, enRetroceso, esPosicionActual, esDestino),
+                      border: "1px solid #ddd", borderRadius: 4,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: esPosicionActual ? 36 : (valor >= 0 ? 18 : 12),
+                      color: esPosicionActual ? "#fff" : (valor >= 0 ? "#3b1a6e" : "inherit"),
+                      fontWeight: "bold",
+                      cursor: (modoObstaculo || modoSeleccionInicial || seleccionandoDestino) && !corriendo && !animando
+                        ? "pointer" : "default",
+                      userSelect: "none",
+                      transition: "transform 0.15s, background 0.1s",
+                    }}
+                    onMouseEnter={e => {
+                      if ((modoObstaculo || modoSeleccionInicial || seleccionandoDestino) && !corriendo && !animando)
+                        e.currentTarget.style.transform = "scale(1.05)";
+                    }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                  >
+                    {esPosicionActual ? "♞"
+                      : esDestino        ? "B"
+                      : valor === -2     ? "🚫"
+                      : valor >= 0       ? valor
+                      : ""}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Leyenda */}
+          <div style={{ fontSize: 12, color: pastelColors.text, textAlign: "center" }}>
+            🟢 Verde = Visitado &nbsp;|&nbsp; 🔴 Rojo = Retroceso &nbsp;|&nbsp; 🟠 Naranja = Posición actual &nbsp;|&nbsp; 🔵 Azul = Destino B &nbsp;|&nbsp; 🚫 = Obstáculo
+          </div>
         </div>
       </div>
     </div>

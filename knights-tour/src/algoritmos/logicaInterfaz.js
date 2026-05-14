@@ -93,7 +93,10 @@ function esValido(x, y, tablero) {
     );
 }
 
-// Nueva función: verifica si el movimiento usa un obstáculo como puente
+function copiarTablero(tablero) {
+    return tablero.map(fila => [...fila]);
+}
+
 function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
     let dx = nx - x;
     let dy = ny - y;
@@ -103,7 +106,6 @@ function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
 
     let casillasDelMovimiento = [];
 
-    // Movimiento en L: 2 en X, 1 en Y
     if (Math.abs(dx) === 2 && Math.abs(dy) === 1) {
         casillasDelMovimiento = [
             [x + sx, y],
@@ -111,7 +113,6 @@ function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
         ];
     }
 
-    // Movimiento en L: 1 en X, 2 en Y
     if (Math.abs(dx) === 1 && Math.abs(dy) === 2) {
         casillasDelMovimiento = [
             [x, y + sy],
@@ -119,7 +120,6 @@ function usaObstaculoComoPuente(x, y, nx, ny, tablero) {
         ];
     }
 
-    // Verificar si alguna casilla intermedia es un obstáculo
     for (let casilla of casillasDelMovimiento) {
         let cx = casilla[0];
         let cy = casilla[1];
@@ -139,17 +139,14 @@ export function movimientosValidos(x, y, tablero, estadisticas = null) {
         let nx = x + mov[0];
         let ny = y + mov[1];
 
-        // Contar movimiento intentado si se proporciona estadisticas
         if (estadisticas) {
             estadisticas.movimientosIntentados++;
         }
 
-        // Verificar si la casilla es válida (dentro del tablero, no visitada, no obstáculo)
         if (!esValido(nx, ny, tablero)) {
             continue;
         }
 
-        // Verificar si el movimiento usa un obstáculo como puente
         if (usaObstaculoComoPuente(x, y, nx, ny, tablero)) {
             continue;
         }
@@ -174,7 +171,7 @@ function contarCasillasLibres(tablero) {
     return total;
 }
 
-export function verificarResoluble(tablero, startX, startY, getMovimientos) {
+export function verificarResoluble(tablero, startX, startY) {
     const n = tablero.length;
 
     if (startX < 0 || startX >= n || startY < 0 || startY >= n) {
@@ -185,53 +182,58 @@ export function verificarResoluble(tablero, startX, startY, getMovimientos) {
         return { posible: false, mensaje: "La casilla inicial es un obstáculo." };
     }
 
-    // Verificación real: correr el algoritmo completo
-    const resultado = iniciarRecorrido(tablero, startX, startY);
-    
+    const resultado = iniciarRecorrido(tablero, startX, startY, false);
+
     return {
         posible: resultado.posible,
-        mensaje: resultado.posible ? "" : "No existe solución para este tablero con esta posición inicial."
+        mensaje: resultado.posible
+            ? ""
+            : "No existe solución para este tablero con esta posición inicial."
     };
 }
 
-function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas, estadisticas, historial) {
-    // Si ya visitó todas las casillas libres
+function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas, estadisticas, historial, mejorRecorridoData) {
+    if (movimientoActual > mejorRecorridoData.mayorPasoAlcanzado) {
+        mejorRecorridoData.mayorPasoAlcanzado = movimientoActual;
+        mejorRecorridoData.mejorTablero = copiarTablero(tablero);
+        mejorRecorridoData.ultimaPosicion = { x, y };
+    }
+
     if (movimientoActual === totalCasillas) {
         return true;
     }
 
-    // Obtener movimientos válidos (pasando estadisticas para contar)
     let validos = movimientosValidos(x, y, tablero, estadisticas);
 
-    // Probar todos los movimientos válidos
     for (let i = 0; i < validos.length; i++) {
         let nuevoX = validos[i][0];
         let nuevoY = validos[i][1];
 
-        // Marcar casilla
         tablero[nuevoX][nuevoY] = movimientoActual;
-        
-        historial.push({
-            tipo: "avance",
-            x: nuevoX,
-            y: nuevoY,
-            paso: movimientoActual
-        });
 
-        // Backtracking recursivo
-        if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, totalCasillas, estadisticas, historial)) {
+        if (historial) {
+            historial.push({
+                tipo: "avance",
+                x: nuevoX,
+                y: nuevoY,
+                paso: movimientoActual
+            });
+        }
+
+        if (resolverCaballo(tablero, nuevoX, nuevoY, movimientoActual + 1, totalCasillas, estadisticas, historial, mejorRecorridoData)) {
             return true;
         }
 
-        // Retroceso
         estadisticas.retrocesos++;
-        
-        historial.push({
-            tipo: "retroceso",
-            x: nuevoX,
-            y: nuevoY,
-            paso: movimientoActual
-        });
+
+        if (historial) {
+            historial.push({
+                tipo: "retroceso",
+                x: nuevoX,
+                y: nuevoY,
+                paso: movimientoActual
+            });
+        }
 
         tablero[nuevoX][nuevoY] = -1;
     }
@@ -239,67 +241,69 @@ function resolverCaballo(tablero, x, y, movimientoActual, totalCasillas, estadis
     return false;
 }
 
-export function iniciarRecorrido(tablero, inicioX, inicioY) {
+export function iniciarRecorrido(tablero, inicioX, inicioY, guardarHistorial = true) {
     const n = tablero.length;
     const validacion = validarPosicionInicial(inicioX, inicioY, n);
-    
+
     if (!validacion.valido) {
         return {
             posible: false,
             mensaje: validacion.mensaje,
             tablero: tablero.map(fila => [...fila]),
-            estadisticas: {
-                movimientosIntentados: 0,
-                retrocesos: 0,
-                tiempo: 0
-            },
-            historial: []
+            estadisticas: { movimientosIntentados: 0, retrocesos: 0, tiempo: 0 },
+            historial: [],
+            mejorRecorrido: null,
+            mayorPasoAlcanzado: 0
         };
     }
 
     const copia = tablero.map(fila => [...fila]);
-    const estadisticas = {
-        movimientosIntentados: 0,
-        retrocesos: 0,
-        tiempo: 0
-    };
-    const historial = [];
+    const estadisticas = { movimientosIntentados: 0, retrocesos: 0, tiempo: 0 };
+    const historial = guardarHistorial ? [] : null;
 
-    // Verificar que la casilla inicial no sea obstáculo
     if (copia[inicioX][inicioY] === -2) {
         return {
             posible: false,
             mensaje: "La casilla inicial es un obstáculo.",
             tablero: copia,
             estadisticas,
-            historial
+            historial: [],
+            mejorRecorrido: null,
+            mayorPasoAlcanzado: 0
         };
     }
 
     const totalCasillas = contarCasillasLibres(copia);
-    
-    // Marcar posición inicial
-    copia[inicioX][inicioY] = 0;
-    historial.push({ 
-        tipo: "inicio", 
-        x: inicioX, 
-        y: inicioY, 
-        paso: 0 
-    });
 
-    // Medir tiempo de ejecución
+    copia[inicioX][inicioY] = 0;
+
+    if (guardarHistorial) {
+        historial.push({ tipo: "inicio", x: inicioX, y: inicioY, paso: 0 });
+    }
+
+    const mejorRecorridoData = {
+        mejorTablero: copiarTablero(copia),
+        mayorPasoAlcanzado: 1,
+        ultimaPosicion: { x: inicioX, y: inicioY }
+    };
+
     const inicioTiempo = performance.now();
-    
-    // Ejecutar el algoritmo recursivo
-    const posible = resolverCaballo(copia, inicioX, inicioY, 1, totalCasillas, estadisticas, historial);
-    
+    const posible = resolverCaballo(
+        copia, inicioX, inicioY, 1, totalCasillas,
+        estadisticas, historial, mejorRecorridoData
+    );
     estadisticas.tiempo = performance.now() - inicioTiempo;
 
     return {
         posible,
-        mensaje: posible ? "Solución encontrada." : "No se encontró solución.",
-        tablero: copia,
+        mensaje: posible
+            ? `Solución encontrada. Se completaron ${totalCasillas - 1} movimientos.`
+            : `No se encontró solución. Mejor recorrido: ${mejorRecorridoData.mayorPasoAlcanzado - 1} de ${totalCasillas - 1} pasos.`,
+        tablero: posible ? copia : mejorRecorridoData.mejorTablero,
         estadisticas,
-        historial
+        historial: historial ?? [],
+        mejorRecorrido: mejorRecorridoData.mejorTablero,
+        mayorPasoAlcanzado: mejorRecorridoData.mayorPasoAlcanzado - 1,
+        ultimaPosicion: mejorRecorridoData.ultimaPosicion
     };
 }

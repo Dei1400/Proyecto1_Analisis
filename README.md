@@ -20,7 +20,7 @@ Implementación base del recorrido del caballo utilizando retroceso para probar 
 Implementación para calcular cuántos caminos distintos existen entre dos posiciones usando exactamente `k` movimientos.
 
 ### Heurística de Warnsdorff
-Versión optimizada que ordena los movimientos según la cantidad de movimientos futuros disponibles.
+Versión optimizada que ordena los movimientos  según la cantidad de movimientos futuros disponibles.
 
 ---
 
